@@ -7,7 +7,8 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-        <title>{{ $title ?? 'Admin Portal' }} - {{ config('app.name', 'Laundry App') }}</title>
+        <title>{{ $title ?? 'Admin Portal' }} - {{ \Modules\Admin\Models\Setting::getSiteName() }}</title>
+        <link rel="icon" href="{{ \Modules\Admin\Models\Setting::getFaviconUrl() }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

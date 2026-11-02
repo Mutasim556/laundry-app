@@ -4,6 +4,7 @@
     </IfModule>
 
     RewriteEngine On
+    RewriteBase /laundry-app/
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
