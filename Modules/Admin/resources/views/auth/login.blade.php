@@ -15,11 +15,29 @@
             <div class="bg-slate-900/80 backdrop-blur-xl p-8 sm:p-10 rounded-3xl shadow-2xl border border-slate-800/80 relative">
                 <!-- Header with Logo inside the Card -->
                 <div class="text-center mb-7">
-                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white shadow-xl shadow-indigo-500/25 ring-1 ring-white/20 mb-4 transition duration-300 hover:scale-105">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                        </svg>
-                    </div>
+                    @if (\Modules\Admin\Models\Setting::hasCustom('site_logo_login'))
+                        <div class="inline-flex items-center justify-center mb-4 transition duration-300 hover:scale-105" style="max-height: 52px; max-width: 240px;">
+                            <img src="{{ \Modules\Admin\Models\Setting::getLoginLogoUrl() }}" alt="{{ \Modules\Admin\Models\Setting::getSiteName() }}" style="max-height: 48px; max-width: 220px; object-fit: contain; display: block;" class="max-h-12 w-auto object-contain">
+                        </div>
+                    @elseif (\Modules\Admin\Models\Setting::hasCustom('site_logo_dark'))
+                        <div class="inline-flex items-center justify-center mb-4 transition duration-300 hover:scale-105" style="max-height: 52px; max-width: 240px;">
+                            <img src="{{ \Modules\Admin\Models\Setting::getDarkLogoUrl() }}" alt="{{ \Modules\Admin\Models\Setting::getSiteName() }}" style="max-height: 48px; max-width: 220px; object-fit: contain; display: block;" class="max-h-12 w-auto object-contain">
+                        </div>
+                    @elseif (\Modules\Admin\Models\Setting::hasCustom('site_logo'))
+                        <div class="inline-flex items-center justify-center mb-4 transition duration-300 hover:scale-105" style="max-height: 52px; max-width: 240px;">
+                            <img src="{{ \Modules\Admin\Models\Setting::getLogoUrl() }}" alt="{{ \Modules\Admin\Models\Setting::getSiteName() }}" style="max-height: 48px; max-width: 220px; object-fit: contain; display: block;" class="max-h-12 w-auto object-contain">
+                        </div>
+                    @elseif (\Modules\Admin\Models\Setting::hasCustom('site_icon'))
+                        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md p-2.5 shadow-xl shadow-indigo-500/25 ring-1 ring-white/20 mb-4 transition duration-300 hover:scale-105">
+                            <img src="{{ \Modules\Admin\Models\Setting::getIconUrl() }}" alt="{{ \Modules\Admin\Models\Setting::getSiteName() }}" class="w-full h-full object-contain">
+                        </div>
+                    @else
+                        {{-- Default Brand Identity (Icon + Logo Text) --}}
+                        <div class="inline-flex items-center justify-center gap-2.5 mb-4 transition duration-300 hover:scale-105" style="min-height: 44px;">
+                            <img src="{{ \Modules\Admin\Models\Setting::getDarkIconUrl() }}" alt="Logo Icon" style="height: 38px; width: 38px; object-fit: contain; display: block;">
+                            <img src="{{ \Modules\Admin\Models\Setting::getDarkLogoUrl() }}" alt="{{ \Modules\Admin\Models\Setting::getSiteName() }}" style="height: 24px; max-width: 160px; object-fit: contain; display: block;">
+                        </div>
+                    @endif
 
                     <!-- <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mb-2">
                         <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>

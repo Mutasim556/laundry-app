@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureAccountNotBlocked
@@ -34,7 +35,11 @@ class EnsureAccountNotBlocked
                 return redirect()->route('admin.login')->withErrors(['email' => $message]);
             }
 
-            return redirect()->route('login')->withErrors(['email' => $message]);
+            if (Route::has('login')) {
+                return redirect()->route('login')->withErrors(['email' => $message]);
+            }
+
+            return redirect('/')->withErrors(['email' => $message]);
         }
 
         return $next($request);

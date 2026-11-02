@@ -45,11 +45,36 @@ class AdminPermissionSeeder extends Seeder
                 'delete-orders',
                 'update-order-status',
             ],
+            'Units Management' => [
+                'view-units',
+                'create-units',
+                'edit-units',
+                'delete-units',
+            ],
+            'Item Categories' => [
+                'view-item-categories',
+                'create-item-categories',
+                'edit-item-categories',
+                'delete-item-categories',
+            ],
+            'Items Management' => [
+                'view-items',
+                'create-items',
+                'edit-items',
+                'delete-items',
+            ],
             'Services & Pricing' => [
                 'view-services',
                 'create-services',
                 'edit-services',
                 'delete-services',
+            ],
+            'Stores Management' => [
+                'view-stores',
+                'create-stores',
+                'edit-stores',
+                'delete-stores',
+                'manage-vendors',
             ],
             'Customers' => [
                 'view-customers',
