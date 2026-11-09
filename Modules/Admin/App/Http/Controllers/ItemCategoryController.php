@@ -113,7 +113,7 @@ class ItemCategoryController extends Controller
             'name' => ['required', 'string', 'max:100', Rule::unique('item_categories', 'name')->ignore($itemCategory->id)],
             'slug' => ['nullable', 'string', 'max:120'],
             'icon' => ['nullable', 'string', 'max:50'],
-            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp,svg', 'max:2048'],
+            'image' => ['mimes:jpeg,png,jpg,webp,svg', 'max:2048'],
             'remove_image' => ['nullable', 'boolean'],
             'description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
