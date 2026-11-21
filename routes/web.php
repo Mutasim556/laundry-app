@@ -66,6 +66,7 @@ Route::get('/services', function (Request $request) {
     if ($request->expectsJson()) {
         return response()->json([
             'html' => view('services.results', $data)->render(),
+            'summary' => view('services.category-summary', $data)->render(),
             'category' => $category?->slug ?? 'other-services',
             'title' => $category?->name ?? 'Other services',
             'total' => $services->total(),
@@ -74,3 +75,4 @@ Route::get('/services', function (Request $request) {
 
     return view('services.index', $data);
 })->name('services.index');
+

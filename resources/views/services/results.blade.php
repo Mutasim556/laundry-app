@@ -1,16 +1,20 @@
 <div class="results-heading">
-    <div><p class="eyebrow">A FRESH TAKE ON EVERYDAY CARE</p><h2 id="results-title" tabindex="-1">{{ $category?->name ?? 'Other services' }}</h2><p>{{ $category?->description ?: 'Explore the services below and find the care that fits.' }}</p></div>
+    <div><p class="eyebrow">A FRESH TAKE ON EVERYDAY CARE</p><h2 id="results-title" tabindex="-1">{{ $category?->name ?? 'Other services' }}</h2><p>{{ $category?->short_description ?: 'Explore the services below and find the care that fits.' }}</p></div>
     <span class="result-count">{{ $services->total() }} {{ $services->total() === 1 ? 'service' : 'services' }}</span>
 </div>
 @if ($items->isNotEmpty())
     <nav class="item-filters" aria-label="Filter by item">
         <a href="{{ route('services.index', array_merge(request()->except(['item', 'page']), ['category' => $category->slug])) }}" data-item="" class="item-chip {{ ! $selectedItem ? 'is-active' : '' }}" @if (! $selectedItem) aria-current="true" @endif>All items</a>
+        <button class="item-scroll-button" type="button" data-item-scroll="-1" aria-label="Previous items">&#8249;</button>
+        <div class="item-scroll-track">
         @foreach ($items as $item)
             <a href="{{ route('services.index', array_merge(request()->except('page'), ['category' => $category->slug, 'item' => $item->id])) }}" data-item="{{ $item->id }}" class="item-chip {{ (string) $selectedItem === (string) $item->id ? 'is-active' : '' }}" @if ((string) $selectedItem === (string) $item->id) aria-current="true" @endif>{{ $item->name }}</a>
         @endforeach
         @if ($hasCategoryServices)
             <a href="{{ route('services.index', array_merge(request()->except('page'), ['category' => $category->slug, 'item' => 'other'])) }}" data-item="other" class="item-chip {{ $selectedItem === 'other' ? 'is-active' : '' }}" @if ($selectedItem === 'other') aria-current="true" @endif>General care</a>
         @endif
+        </div>
+        <button class="item-scroll-button" type="button" data-item-scroll="1" aria-label="Next items">&#8250;</button>
     </nav>
 @endif
 @if ($search !== '' || $selectedItem || $sort !== 'name')
@@ -41,3 +45,6 @@
 @if ($services->hasPages())
     <nav class="pagination" aria-label="Service pages"><span>Showing {{ $services->firstItem() ?? 0 }}–{{ $services->lastItem() ?? 0 }} of {{ $services->total() }}</span><div>@if ($services->onFirstPage())<span class="page-button disabled" aria-disabled="true">← Previous</span>@else<a class="page-button" href="{{ $services->previousPageUrl() }}" data-page>← Previous</a>@endif<span class="page-number">{{ $services->currentPage() }} / {{ $services->lastPage() }}</span>@if ($services->hasMorePages())<a class="page-button" href="{{ $services->nextPageUrl() }}" data-page>Next →</a>@else<span class="page-button disabled" aria-disabled="true">Next →</span>@endif</div></nav>
 @endif
+
+
+
