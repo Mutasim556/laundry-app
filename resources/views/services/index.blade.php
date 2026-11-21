@@ -36,19 +36,33 @@
                 <div class="care-note"><span aria-hidden="true">✳</span><h3>Good care. Longer wear.</h3><p>A little professional care helps keep your favourites in rotation.</p></div>
             </aside>
             <section class="catalog-main" aria-label="Find laundry services">
+
                 <form class="filter-bar" id="service-filters" action="{{ route('services.index') }}" method="GET" role="search">
                     <input type="hidden" name="category" value="{{ $category?->slug ?? 'other-services' }}"><input type="hidden" name="item" value="{{ $selectedItem }}">
                     <div class="search-field"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><label class="sr-only" for="service-search">Search in this category</label><input type="search" id="service-search" name="q" placeholder="Search services or items…" value="{{ $search }}" maxlength="100" autocomplete="off"><kbd aria-hidden="true">↵</kbd></div>
                     <div class="sort-field"><label for="service-sort">Sort by</label><select id="service-sort" name="sort"><option value="name" @selected($sort === 'name')>Name: A–Z</option><option value="price-low" @selected($sort === 'price-low')>Price: low to high</option><option value="price-high" @selected($sort === 'price-high')>Price: high to low</option></select></div>
                     <button class="sr-only focus-visible-button" type="submit">Apply filters</button>
                 </form>
+
                 <div class="request-error" id="request-error" role="alert" hidden><span>We couldn’t load the services. Please try again.</span><button type="button" id="retry-request">Try again ↻</button></div>
                 <p class="sr-only" id="catalog-status" role="status" aria-live="polite"></p>
+                <div class="results-summary-layout">
                 <div class="results-container" id="results-container" aria-busy="false"><div id="service-results">@include('services.results')</div><div class="loading-panel" aria-hidden="true"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-chips"></div><div class="skeleton-grid">@for ($i = 0; $i < 6; $i++)<div class="skeleton skeleton-card"></div>@endfor</div></div></div>
+                <div id="category-summary">@include('services.category-summary')</div>
+                </div>
                 <p class="pricing-note"><span aria-hidden="true">ⓘ</span> All prices are in Bangladeshi Taka (BDT). The billing unit is shown with each service.</p>
             </section>
         </div>
         <footer class="site-footer"><span>Freshgo Laundry</span><p>A fresh start for the things you wear.</p><a href="{{ url('/') }}">Back to home ↗</a></footer>
     </main>
+    <dialog id="category-dialog" class="category-dialog" aria-labelledby="category-dialog-title">
+        <div class="category-dialog-header"><h2 id="category-dialog-title"></h2><button type="button" data-dialog-close aria-label="Close">&times;</button></div>
+        <div id="category-dialog-content" class="category-dialog-content"></div>
+        <div class="category-dialog-footer"><button type="button" class="dialog-close-button" data-dialog-close>Close</button></div>
+    </dialog>
 </body>
 </html>
+
+
+
+

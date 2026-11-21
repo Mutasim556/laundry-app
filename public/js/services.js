@@ -61,7 +61,12 @@
             if (typeof data.html !== 'string') throw new Error('Invalid catalog response');
 
             const canonical = new URL(response.url);
+            const itemScroll = results.querySelector('.item-scroll-track')?.scrollLeft || 0;
             results.innerHTML = data.html;
+            const itemTrack = results.querySelector('.item-scroll-track');
+            if (itemTrack) itemTrack.scrollLeft = itemScroll;
+            const summary = document.querySelector('#category-summary');
+            if (summary && typeof data.summary === 'string') summary.innerHTML = data.summary;
             syncControls(canonical, data.category);
             document.title = `${data.title} | Freshgo Laundry`;
             if (historyMode === 'push' && canonical.href !== committedUrl.href) history.pushState({}, '', canonical);
@@ -89,6 +94,12 @@
     };
 
     document.addEventListener('click', event => {
+        const itemScrollButton = event.target.closest('[data-item-scroll]');
+        if (itemScrollButton) {
+            const track = itemScrollButton.closest('.item-filters').querySelector('.item-scroll-track');
+            track?.scrollBy({ left: Number(itemScrollButton.dataset.itemScroll) * Math.max(120, track.clientWidth * 0.75), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+            return;
+        }
         const link = event.target.closest('[data-category], [data-item], [data-reset], [data-page]');
         if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
@@ -125,8 +136,31 @@
     document.querySelector('#retry-request').addEventListener('click', () => {
         if (pendingRequest) loadServices(pendingRequest.url, pendingRequest.options);
     });
+
+    const categoryDialog = document.querySelector('#category-dialog');
+    document.addEventListener('click', event => {
+        const more = event.target.closest('[data-category-more]');
+        const book = event.target.closest('[data-book-now]');
+        if ((!more && !book) || !categoryDialog) return;
+        const summary = (more || book).closest('.category-summary');
+        const title = summary.querySelector('h2').textContent;
+        categoryDialog.querySelector('#category-dialog-title').textContent = book ? 'Book ' + title : title;
+        const content = categoryDialog.querySelector('#category-dialog-content');
+        if (more) content.innerHTML = summary.querySelector('.category-description-source').innerHTML;
+        else content.textContent = 'Online booking is not available yet.';
+        categoryDialog.showModal();
+    });
+    categoryDialog?.querySelectorAll('[data-dialog-close]').forEach(button => button.addEventListener('click', () => categoryDialog.close()));
+    categoryDialog?.addEventListener('click', event => {
+        const bounds = categoryDialog.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) categoryDialog.close();
+    });
     window.addEventListener('popstate', () => {
         syncControls(new URL(window.location.href));
         loadServices(new URL(window.location.href), { historyMode: 'none', focus: true });
     });
 })();
+
+
+
+

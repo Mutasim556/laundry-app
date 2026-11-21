@@ -249,3 +249,119 @@
 }
 
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Slightly larger catalog text for easier reading. */
+.header-inner nav, .hero-description, .category-link, .results-heading p:last-child { font-size: 15px; }
+.service-card h3 { font-size: 18px; }
+.service-description, .item-chip, .empty-state p { font-size: 14px; }
+.service-type, .billing-unit, .pricing-note, .pagination, .page-button { font-size: 12px; }
+.care-label, .currency { font-size: 11px; }
+@media (max-width: 800px) {
+    .header-inner nav, .category-link { font-size: 13px; }
+    .hero-description, .service-description, .item-chip { font-size: 14px; }
+    .results-heading p:last-child { font-size: 13px; }
+}
+
+.filter-summary-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 310px); gap: 18px; align-items: start; margin-bottom: 30px; }
+.filter-summary-layout .filter-bar { margin-bottom: 0; flex-wrap: wrap; }
+.filter-summary-layout .search-field { flex-basis: 100%; }
+.category-summary { padding: 18px; background: white; border: 1px solid var(--line); border-radius: 12px; }
+.category-summary-heading { display: flex; gap: 10px; align-items: center; }
+.category-summary-heading img { object-fit: contain; border-radius: 50%; }
+.category-summary-heading h2 { margin: 0; font-size: 16px; }
+.category-summary p { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 14px 0; }
+.category-summary details summary { color: var(--blue); font-size: 14px; font-weight: 700; cursor: pointer; }
+.category-summary details p { overflow-wrap: anywhere; white-space: pre-line; }
+.category-book { display: block; width: 100%; margin-top: 16px; padding: 12px; border: 0; border-radius: 7px; background: #dae4ef; color: #52677a; font-weight: 700; }
+@media (max-width: 800px) { .filter-summary-layout { grid-template-columns: 1fr; } }
+.results-summary-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 300px); gap: 20px; align-items: start; }
+.category-summary { position: relative; }
+.category-summary-heading { padding-right: 90px; }
+.category-more summary { position: absolute; top: 25px; right: 18px; list-style: none; }
+.category-more summary::-webkit-details-marker { display: none; }
+.category-more p { margin-top: 12px; }
+@media (max-width: 1000px) { .results-summary-layout { grid-template-columns: 1fr; } }
+.category-more { position: absolute; top: 25px; right: 18px; border: 0; padding: 0; background: none; color: var(--blue); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.category-book { background: #078ded; color: white; cursor: pointer; }
+.category-book:hover { background: #075cba; }
+.category-dialog { width: min(90vw, 560px); max-height: 80vh; border: 0; border-radius: 14px; padding: 24px; color: var(--ink); box-shadow: 0 20px 60px #10243944; }
+.category-dialog::backdrop { background: #10243999; }
+.category-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.category-dialog-header h2 { margin: 0; font-size: 20px; }
+.category-dialog-header button { border: 0; background: transparent; color: var(--ink); font-size: 28px; cursor: pointer; }
+.category-dialog-content { margin: 18px 0; line-height: 1.7; overflow-wrap: anywhere; }
+.dialog-close-button { border: 0; border-radius: 7px; padding: 10px 20px; background: var(--blue); color: white; cursor: pointer; }
+.item-filters { display: flex; flex-wrap: nowrap; align-items: center; gap: 7px; min-width: 0; }
+.item-filters > .item-chip { flex: none; white-space: nowrap; }
+.item-scroll-track { display: flex; flex: 1; min-width: 0; gap: 7px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
+.item-scroll-track::-webkit-scrollbar { display: none; }
+.item-scroll-track .item-chip { flex: none; white-space: nowrap; scroll-snap-align: start; }
+.item-scroll-button { flex: none; width: 30px; height: 38px; padding: 0; border: 1px solid var(--line); border-radius: 7px; color: var(--blue); background: #fff; font-size: 23px; line-height: 1; }
+.item-scroll-button:hover { border-color: var(--blue); }
+
+/* Compact, single-column service list. */
+.service-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.service-card { min-height: 0; padding: 15px 18px; border-radius: 10px; }
+.card-top { margin-bottom: 7px; }
+.card-spark, .care-label { display: none; }
+.service-card h3 { margin: 0 0 4px; font-size: 16px; line-height: 1.4; }
+.service-description { margin: 0; line-height: 1.5; }
+.card-bottom { margin-top: 10px; padding-top: 0; }
+.service-price strong { font-size: 19px; }
+.service-image { width: 80px; height: 60px; object-fit: cover; margin-bottom: 8px; }
+@media (max-width: 520px) {
+    .service-card { min-height: 0; padding: 14px 16px; }
+    .service-card h3 { font-size: 16px; }
+    .card-bottom { margin-top: 10px; padding-top: 0; }
+    .service-price strong { font-size: 19px; }
+}
+.card-bottom { align-items: flex-end; }
+@media (max-width: 520px) { .card-bottom { justify-content: flex-end; } }
+.service-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 18px; align-items: start; }
+.service-card .card-top, .service-card .service-image, .service-card h3, .service-card .service-description { grid-column: 1; }
+.service-card .card-bottom { grid-column: 2; grid-row: 1 / span 4; align-self: center; margin: 0; padding: 0; }
+.service-card .service-price { justify-content: flex-end; }
+.category-dialog { width: min(92vw, 760px); max-width: 760px; max-height: min(80vh, 720px); padding: 0; overflow: hidden; }
+.category-dialog[open] { display: flex; flex-direction: column; }
+.category-dialog-header { flex: none; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.category-dialog-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; padding: 20px 24px; }
+.category-dialog-footer { flex: none; display: flex; justify-content: flex-end; padding: 14px 24px; border-top: 1px solid var(--line); }
+/* Mobile catalog layout */
+@media (max-width: 800px) {
+    .header-inner { flex-wrap: wrap; justify-content: center; gap: 6px 20px; }
+    .header-inner nav { justify-content: center; flex-wrap: wrap; }
+    .category-list { max-width: 100%; }
+    .catalog-main, .results-summary-layout, .results-container, #service-results { min-width: 0; }
+    .results-summary-layout { grid-template-columns: minmax(0, 1fr); }
+    .filter-bar { display: flex; flex-wrap: wrap; }
+    .search-field { flex: 1 1 220px; }
+    .sort-field { flex: 1 1 160px; }
+    .sort-field select { max-width: none; min-width: 0; width: 100%; font-size: 16px; }
+    .category-summary-heading h2 { overflow-wrap: anywhere; }
+    .item-filters { width: 100%; overflow: hidden; }
+    .item-scroll-track { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+    .item-scroll-button { min-width: 36px; min-height: 44px; }
+    .category-book, .category-more, .dialog-close-button, .category-dialog-header button { min-height: 44px; }
+    .category-more { top: 15px; }
+    .category-dialog { width: calc(100% - 24px); max-height: min(85vh, 720px); }
+    .category-dialog-header, .category-dialog-content { padding: 16px 18px; }
+    .category-dialog-footer { padding: 12px 18px; }
+}
+@media (max-width: 520px) {
+    .header-inner, .page-shell { padding-left: 14px; padding-right: 14px; }
+    .header-inner nav { gap: 14px; }
+    .hero { padding: 22px 18px; }
+    .hero h1 { font-size: clamp(26px, 8vw, 32px); }
+    .filter-bar { flex-direction: column; align-items: stretch; }
+    .search-field, .sort-field { flex: none; width: 100%; }
+    .sort-field { margin-left: 0; }
+    .sort-field select { height: 46px; }
+    .service-card { column-gap: 10px; }
+    .service-price { max-width: 110px; text-align: right; }
+    .service-price strong { font-size: 18px; }
+    .item-filters { gap: 4px; }
+    .item-filters > .item-chip { padding-inline: 8px; }
+    .item-scroll-button { width: 34px; min-width: 34px; }
+    .category-summary-heading { padding-right: 95px; }
+    .site-footer { align-items: flex-start; }
+}

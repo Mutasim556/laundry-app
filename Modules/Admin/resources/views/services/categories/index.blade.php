@@ -400,7 +400,7 @@
                             <th style="width: 50px;">#</th>
                             <th>Category</th>
                             <th>Slug</th>
-                            <th>Description</th>
+                            <th>Short Description</th>
                             <th>Status</th>
                             <th>Created At</th>
                             <th style="width: 130px;" class="text-end">Actions</th>
@@ -500,11 +500,15 @@
 
                     <!-- Additional Details Section -->
                     <div class="form-section-title">
-                        <i class="mdi mdi-text-box-outline"></i> Additional Details
+                        <i class="mdi mdi-text-box-outline"></i> Descriptions & Visibility
                     </div>
                     <div class="mb-3">
-                        <label for="create_description" class="form-label fw-semibold">Description</label>
-                        <textarea class="form-control rounded-3" id="create_description" name="description" rows="2" placeholder="Brief note about garments or articles belonging to this laundry category..."></textarea>
+                        <label for="create_short_description" class="form-label fw-semibold">Short Description</label>
+                        <input type="text" class="form-control rounded-3" id="create_short_description" name="short_description" maxlength="255" placeholder="Brief summary (e.g., Trousers, jeans & shorts)">
+                    </div>
+                    <div class="mb-3">
+                        <label for="create_description" class="form-label fw-semibold">Full Description</label>
+                        <textarea class="form-control rounded-3" id="create_description" name="description" rows="2" placeholder="Detailed note about garments or articles belonging to this category..."></textarea>
                     </div>
                     <div class="bg-light p-3 rounded-3 d-flex align-items-center justify-content-between">
                         <div>
@@ -618,10 +622,14 @@
 
                     <!-- Additional Details Section -->
                     <div class="form-section-title">
-                        <i class="mdi mdi-text-box-outline"></i> Additional Details
+                        <i class="mdi mdi-text-box-outline"></i> Descriptions & Visibility
                     </div>
                     <div class="mb-3">
-                        <label for="edit_description" class="form-label fw-semibold">Description</label>
+                        <label for="edit_short_description" class="form-label fw-semibold">Short Description</label>
+                        <input type="text" class="form-control rounded-3" id="edit_short_description" name="short_description" maxlength="255" placeholder="Brief summary (e.g., Trousers, jeans & shorts)">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label fw-semibold">Full Description</label>
                         <textarea class="form-control rounded-3" id="edit_description" name="description" rows="2"></textarea>
                     </div>
                     <div class="bg-light p-3 rounded-3 d-flex align-items-center justify-content-between">
@@ -652,10 +660,22 @@
     <script src="{{ asset('admin/dist/libs/datatables.net/js/jquery.dataTables.min.js') }}"></script>
     <script src="{{ asset('admin/dist/libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js') }}"></script>
     <script src="{{ asset('admin/dist/libs/toastr/toastr.min.js') }}"></script>
+    <script src="{{ asset('admin/dist/libs/ckeditor/ckeditor.js') }}"></script>
     <script src="{{ asset('admin/dist/libs/sweetalert2/dist/sweetalert2.all.min.js') }}"></script>
 
     <script>
         $(document).ready(function() {
+            const categoryEditors = {};
+            if (window.CKEDITOR) {
+                ["create_description", "edit_description"].forEach(id => {
+                    categoryEditors[id] = CKEDITOR.replace(id, { height: 140, removePlugins: "elementspath", resize_enabled: false, toolbar: [{ name: "basicstyles", items: ["Bold", "Italic", "Underline", "RemoveFormat"] }, { name: "paragraph", items: ["NumberedList", "BulletedList"] }, { name: "links", items: ["Link", "Unlink"] }] });
+                });
+            }
+            const setDescription = (id, value) => {
+                if (categoryEditors[id]) categoryEditors[id].setData(value || "");
+                else $("#" + id).val(value || "");
+            };
+            const syncDescription = id => { if (categoryEditors[id]) categoryEditors[id].updateElement(); };
             // Toastr config
             toastr.options = {
                 closeButton: true,
@@ -827,7 +847,7 @@
 
                 $('#create_name').val(name);
                 $('#create_icon').val(icon).trigger('input');
-                $('#create_description').val(desc);
+                setDescription('create_description', desc);
                 $('#create_slug').val('');
                 $('#create_image_input').val('');
                 $('#create_image_preview_box').html('<i class="mdi mdi-image-plus"></i>');
@@ -886,9 +906,11 @@
                         }
                     },
                     {
-                        data: 'description',
-                        render: function(data) {
-                            return `<span class="text-muted small">${data ? data : '-'}</span>`;
+                        data: 'short_description',
+                        render: function(data, type, row) {
+                            let text = (data && data !== '-') ? data : (row.description && row.description !== '-' ? row.description : '-');
+                            const plainText = $('<div>').html(text).text();
+                            return `<span class="text-muted small">${$('<div>').text(plainText).html()}</span>`;
                         }
                     },
                     {
@@ -922,7 +944,7 @@
                                         data-slug="${row.slug}"
                                         data-icon="${row.icon}"
                                         data-image="${row.image_url || ''}"
-                                        data-description="${row.description || ''}"
+                                        data-short-description="${row.short_description || ''}"
                                         data-active="${row.is_active ? 1 : 0}"
                                         title="Edit Category">
                                         <i class="mdi mdi-pencil font-14"></i>
@@ -984,6 +1006,7 @@
                 $btn.prop('disabled', true);
                 $spinner.removeClass('d-none');
 
+                syncDescription('create_description');
                 const formData = new FormData(this);
 
                 $.ajax({
@@ -998,6 +1021,8 @@
                         createSlugManualEdited = false;
                         $('#create_icon').val('mdi-tag-text-outline').trigger('input');
                         $('#create_slug').val('');
+                        $('#create_short_description').val('');
+                        setDescription('create_description', '');
                         $('#create_slug_feedback').html('<i class="mdi mdi-magic-staff"></i> Auto-generates unique slug from category name').attr('class', 'slug-status-indicator is-auto');
                         $('#create_image_preview_box').html('<i class="mdi mdi-image-plus"></i>');
                         $('#create_clear_image_btn').addClass('d-none');
@@ -1043,14 +1068,16 @@
                 const slug = $(this).data('slug');
                 const icon = $(this).data('icon') || 'mdi-tag-text-outline';
                 const image = $(this).data('image');
-                const desc = $(this).data('description');
+                const shortDesc = $(this).data('short-description');
+                const desc = categoriesTable.row($(this).closest('tr')).data().description;
                 const active = $(this).data('active');
 
                 $('#edit_category_id').val(id);
                 $('#edit_name').val(name);
                 $('#edit_slug').val(slug);
                 $('#edit_icon').val(icon).trigger('input');
-                $('#edit_description').val(desc === '-' ? '' : desc);
+                $('#edit_short_description').val(shortDesc === '-' ? '' : shortDesc);
+                setDescription('edit_description', desc === '-' ? '' : desc);
                 $('#edit_is_active').prop('checked', active == 1);
                 $('#edit_remove_image').val('0');
                 $('#edit_image_input').val('');
@@ -1078,9 +1105,11 @@
                 $btn.prop('disabled', true);
                 $spinner.removeClass('d-none');
 
+                syncDescription('edit_description');
                 let url = "{{ route('admin.services.categories.update', ':id') }}";
                 url = url.replace(':id', id);
 
+                
                 const formData = new FormData(this);
 
                 $.ajax({
@@ -1203,3 +1232,5 @@
         });
     </script>
 @endpush
+
+

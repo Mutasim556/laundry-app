@@ -42,7 +42,7 @@ test('admin can retrieve categories data json for datatable', function () {
 
     $response = $this->actingAs($admin, 'admin')->getJson(route('admin.services.categories.data'));
     $response->assertStatus(200)
-             ->assertJsonStructure(['data' => [['id', 'name', 'slug', 'icon', 'image_url', 'description', 'is_active', 'created_at']]]);
+             ->assertJsonStructure(['data' => [['id', 'name', 'slug', 'icon', 'image_url', 'description', 'short_description', 'is_active', 'created_at']]]);
 });
 
 test('admin can check and generate unique slug via ajax endpoint', function () {

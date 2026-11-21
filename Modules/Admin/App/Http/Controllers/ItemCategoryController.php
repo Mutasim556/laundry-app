@@ -37,6 +37,7 @@ class ItemCategoryController extends Controller
                 'image' => $category->image,
                 'image_url' => $category->image_url,
                 'description' => $category->description ?? '-',
+                'short_description' => $category->short_description ?? '-',
                 'is_active' => (bool) $category->is_active,
                 'created_at' => $category->created_at ? $category->created_at->format('M d, Y') : '-',
             ];
@@ -72,7 +73,8 @@ class ItemCategoryController extends Controller
             'slug' => ['nullable', 'string', 'max:120'],
             'icon' => ['nullable', 'string', 'max:50'],
             'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp,svg', 'max:2048'],
-            'description' => ['nullable', 'string', 'max:255'],
+            'short_description' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -93,6 +95,7 @@ class ItemCategoryController extends Controller
             'slug' => $finalSlug,
             'icon' => $validated['icon'] ?? 'mdi-tag-text-outline',
             'image' => $imagePath,
+            'short_description' => $validated['short_description'] ?? null,
             'description' => $validated['description'] ?? null,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : true,
         ]);
@@ -115,7 +118,8 @@ class ItemCategoryController extends Controller
             'icon' => ['nullable', 'string', 'max:50'],
             'image' => ['mimes:jpeg,png,jpg,webp,svg', 'max:2048'],
             'remove_image' => ['nullable', 'boolean'],
-            'description' => ['nullable', 'string', 'max:255'],
+            'short_description' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -141,6 +145,7 @@ class ItemCategoryController extends Controller
             'slug' => $finalSlug,
             'icon' => $validated['icon'] ?? $itemCategory->icon,
             'image' => $imagePath,
+            'short_description' => $validated['short_description'] ?? null,
             'description' => $validated['description'] ?? null,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : $itemCategory->is_active,
         ]);

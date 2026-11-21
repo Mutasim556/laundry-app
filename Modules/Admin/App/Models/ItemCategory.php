@@ -17,6 +17,7 @@ class ItemCategory extends Model
         'icon',
         'image',
         'description',
+        'short_description',
         'is_active',
     ];
 
