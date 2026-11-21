@@ -4,12 +4,23 @@ namespace Modules\Admin\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ItemCategory extends Model
 {
     use HasFactory;
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class, 'item_category_id');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(Item::class, 'item_category_id');
+    }
 
     protected $fillable = [
         'name',

@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'uk_address' => [
+        'provider' => env('UK_ADDRESS_PROVIDER', 'auto'), // 'ideal_postcodes', 'getaddress', 'nominatim', or 'auto'
+        'ideal_postcodes_key' => env('IDEAL_POSTCODES_API_KEY'),
+        'getaddress_key' => env('GETADDRESS_API_KEY'),
+        'postcodes_io_url' => env('POSTCODES_IO_URL', 'https://api.postcodes.io'),
+        'nominatim_url' => env('NOMINATIM_URL', 'https://nominatim.openstreetmap.org'),
+    ],
+
 ];

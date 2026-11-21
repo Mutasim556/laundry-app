@@ -32,8 +32,13 @@
         document.querySelectorAll('[data-category]').forEach(link => {
             const active = link.dataset.category === form.elements.category.value;
             link.classList.toggle('is-active', active);
-            if (active) link.setAttribute('aria-current', 'page');
-            else link.removeAttribute('aria-current');
+            if (active) {
+                link.setAttribute('aria-current', 'page');
+                // Scroll into view within the category slider track if offscreen
+                link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            } else {
+                link.removeAttribute('aria-current');
+            }
         });
     };
 
@@ -139,15 +144,22 @@
 
     const categoryDialog = document.querySelector('#category-dialog');
     document.addEventListener('click', event => {
-        const more = event.target.closest('[data-category-more]');
         const book = event.target.closest('[data-book-now]');
-        if ((!more && !book) || !categoryDialog) return;
-        const summary = (more || book).closest('.category-summary');
+        if (book) {
+            const targetUrl = book.dataset.bookingUrl || book.getAttribute('href');
+            if (targetUrl) {
+                event.preventDefault();
+                window.location.href = targetUrl;
+                return;
+            }
+        }
+        const more = event.target.closest('[data-category-more]');
+        if (!more || !categoryDialog) return;
+        const summary = more.closest('.category-summary');
         const title = summary.querySelector('h2').textContent;
-        categoryDialog.querySelector('#category-dialog-title').textContent = book ? 'Book ' + title : title;
+        categoryDialog.querySelector('#category-dialog-title').textContent = title;
         const content = categoryDialog.querySelector('#category-dialog-content');
-        if (more) content.innerHTML = summary.querySelector('.category-description-source').innerHTML;
-        else content.textContent = 'Online booking is not available yet.';
+        content.innerHTML = summary.querySelector('.category-description-source').innerHTML;
         categoryDialog.showModal();
     });
     categoryDialog?.querySelectorAll('[data-dialog-close]').forEach(button => button.addEventListener('click', () => categoryDialog.close()));
@@ -159,6 +171,49 @@
         syncControls(new URL(window.location.href));
         loadServices(new URL(window.location.href), { historyMode: 'none', focus: true });
     });
+
+    // Horizontal Category Slider Navigation Logic
+    const catTrack = document.querySelector('#categorySliderTrack');
+    const catPrevBtn = document.querySelector('#catSliderPrev');
+    const catNextBtn = document.querySelector('#catSliderNext');
+
+    if (catTrack && catPrevBtn && catNextBtn) {
+        const updateArrows = () => {
+            const tolerance = 4;
+            const atStart = catTrack.scrollLeft <= tolerance;
+            const atEnd = catTrack.scrollLeft + catTrack.clientWidth >= catTrack.scrollWidth - tolerance;
+            catPrevBtn.disabled = atStart;
+            catNextBtn.disabled = atEnd;
+        };
+
+        const getScrollDistance = () => {
+            // Calculate width of one or two cards plus gap
+            const firstCard = catTrack.querySelector('.category-slider-item');
+            if (firstCard) {
+                const cardWidth = firstCard.getBoundingClientRect().width;
+                const gap = 16;
+                // Slide 2 cards on desktop/tablet, 1 on mobile
+                const count = window.innerWidth >= 768 ? 2 : 1;
+                return (cardWidth + gap) * count;
+            }
+            return catTrack.clientWidth * 0.75;
+        };
+
+        catPrevBtn.addEventListener('click', () => {
+            catTrack.scrollBy({ left: -getScrollDistance(), behavior: 'smooth' });
+        });
+
+        catNextBtn.addEventListener('click', () => {
+            catTrack.scrollBy({ left: getScrollDistance(), behavior: 'smooth' });
+        });
+
+        catTrack.addEventListener('scroll', updateArrows, { passive: true });
+        window.addEventListener('resize', updateArrows);
+
+        // Initial arrow state check
+        updateArrows();
+        setTimeout(updateArrows, 150);
+    }
 })();
 
 

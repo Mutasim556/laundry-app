@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BookingAddressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
@@ -8,7 +9,10 @@ use Modules\Admin\Models\ItemCategory;
 use Modules\Admin\Models\Service;
 
 Route::get('/', function () {
-    return view('welcome', ['categories' => ItemCategory::query()->where('is_active', true)->orderBy('id')->get()]);
+    $categories = ItemCategory::query()->where('is_active', true)->orderBy('id')->get();
+    $popularServices = Service::query()->with(['unit', 'category'])->where('is_active', true)->take(8)->get();
+
+    return view('welcome', compact('categories', 'popularServices'));
 });
 
 Route::get('/services', function (Request $request) {
@@ -75,4 +79,31 @@ Route::get('/services', function (Request $request) {
 
     return view('services.index', $data);
 })->name('services.index');
+
+// Booking Flow: 5-Step Connected Progress Workflow
+Route::prefix('booking')->name('booking.')->group(function () {
+    // Step 1: Select Services
+    Route::get('/services', [BookingAddressController::class, 'showServicesStep'])->name('services');
+    Route::post('/services', [BookingAddressController::class, 'storeServicesStep'])->name('services.store');
+
+    // Step 2: Collection Address / Hotel
+    Route::get('/address', [BookingAddressController::class, 'showAddressStep'])->name('address');
+    Route::post('/address', [BookingAddressController::class, 'storeAddress'])->name('address.store');
+    Route::get('/postcode-lookup', [BookingAddressController::class, 'lookupPostcode'])->name('postcode.lookup');
+    Route::get('/hotel-search', [BookingAddressController::class, 'searchHotels'])->name('hotel.search');
+
+    // Step 3: Schedule Collection & Delivery
+    Route::get('/schedule', [BookingAddressController::class, 'showScheduleStep'])->name('schedule');
+    Route::post('/schedule', [BookingAddressController::class, 'storeScheduleStep'])->name('schedule.store');
+
+    // Step 4: Customer Details & Notes
+    Route::get('/details', [BookingAddressController::class, 'showDetailsStep'])->name('details');
+    Route::post('/details', [BookingAddressController::class, 'storeDetailsStep'])->name('details.store');
+
+    // Step 5: Review & Confirm
+    Route::get('/confirm', [BookingAddressController::class, 'showConfirmStep'])->name('confirm');
+    Route::post('/confirm', [BookingAddressController::class, 'storeConfirmStep'])->name('confirm.store');
+    Route::post('/confirm/options', [BookingAddressController::class, 'updateConfirmOptions'])->name('confirm.options');
+});
+
 

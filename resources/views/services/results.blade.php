@@ -1,24 +1,29 @@
-<div class="results-heading">
-    <div><p class="eyebrow">A FRESH TAKE ON EVERYDAY CARE</p><h2 id="results-title" tabindex="-1">{{ $category?->name ?? 'Other services' }}</h2><p>{{ $category?->short_description ?: 'Explore the services below and find the care that fits.' }}</p></div>
-    <span class="result-count">{{ $services->total() }} {{ $services->total() === 1 ? 'service' : 'services' }}</span>
+<div class="results-header-box results-heading">
+    <div>
+        <h2 id="results-title" class="results-title-text" tabindex="-1">{{ $category?->name ?? 'Other services' }}</h2>
+        <p class="results-short-desc">{{ $category?->short_description ?: 'Explore the services below and find the care that fits.' }}</p>
+    </div>
+    <span class="results-count-pill result-count">{{ $services->total() }} {{ $services->total() === 1 ? 'service' : 'services' }}</span>
 </div>
+
 @if ($items->isNotEmpty())
-    <nav class="item-filters" aria-label="Filter by item">
-        <a href="{{ route('services.index', array_merge(request()->except(['item', 'page']), ['category' => $category->slug])) }}" data-item="" class="item-chip {{ ! $selectedItem ? 'is-active' : '' }}" @if (! $selectedItem) aria-current="true" @endif>All items</a>
-        <button class="item-scroll-button" type="button" data-item-scroll="-1" aria-label="Previous items">&#8249;</button>
+    <nav class="item-filters item-filters-bar" aria-label="Filter by item">
+        <a href="{{ route('services.index', array_merge(request()->except(['item', 'page']), ['category' => $category->slug])) }}" data-item="" class="item-chip item-chip-pill {{ ! $selectedItem ? 'is-active' : '' }}" @if (! $selectedItem) aria-current="true" @endif>All items</a>
+        <button class="item-scroll-button item-scroll-btn" type="button" data-item-scroll="-1" aria-label="Previous items">&#8249;</button>
         <div class="item-scroll-track">
         @foreach ($items as $item)
-            <a href="{{ route('services.index', array_merge(request()->except('page'), ['category' => $category->slug, 'item' => $item->id])) }}" data-item="{{ $item->id }}" class="item-chip {{ (string) $selectedItem === (string) $item->id ? 'is-active' : '' }}" @if ((string) $selectedItem === (string) $item->id) aria-current="true" @endif>{{ $item->name }}</a>
+            <a href="{{ route('services.index', array_merge(request()->except('page'), ['category' => $category->slug, 'item' => $item->id])) }}" data-item="{{ $item->id }}" class="item-chip item-chip-pill {{ (string) $selectedItem === (string) $item->id ? 'is-active' : '' }}" @if ((string) $selectedItem === (string) $item->id) aria-current="true" @endif>{{ $item->name }}</a>
         @endforeach
         @if ($hasCategoryServices)
-            <a href="{{ route('services.index', array_merge(request()->except('page'), ['category' => $category->slug, 'item' => 'other'])) }}" data-item="other" class="item-chip {{ $selectedItem === 'other' ? 'is-active' : '' }}" @if ($selectedItem === 'other') aria-current="true" @endif>General care</a>
+            <a href="{{ route('services.index', array_merge(request()->except('page'), ['category' => $category->slug, 'item' => 'other'])) }}" data-item="other" class="item-chip item-chip-pill {{ $selectedItem === 'other' ? 'is-active' : '' }}" @if ($selectedItem === 'other') aria-current="true" @endif>General care</a>
         @endif
         </div>
-        <button class="item-scroll-button" type="button" data-item-scroll="1" aria-label="Next items">&#8250;</button>
+        <button class="item-scroll-button item-scroll-btn" type="button" data-item-scroll="1" aria-label="Next items">&#8250;</button>
     </nav>
 @endif
+
 @if ($search !== '' || $selectedItem || $sort !== 'name')
-    <div class="active-filters">
+    <div class="active-filters active-filters-box">
         <span>
             @if ($search !== '')
                 Results for <strong>“{{ $search }}”</strong>
@@ -26,25 +31,73 @@
                 Your filters are applied
             @endif
         </span>
-        <a href="{{ route('services.index', ['category' => $category?->slug ?? 'other-services']) }}" data-reset>Clear filters <span aria-hidden="true">×</span></a>
+        <a href="{{ route('services.index', ['category' => $category?->slug ?? 'other-services']) }}" data-reset>Clear filters <span aria-hidden="true">&times;</span></a>
     </div>
 @endif
-<div class="service-grid">
+
+<div class="service-grid service-cards-grid">
     @forelse ($services as $service)
-        <article class="service-card" style="--card-order: {{ $loop->index }}">
-            <div class="card-top"><span class="service-type">{{ $service->item?->name ?? 'General care' }}</span><span class="card-spark" aria-hidden="true">✦</span></div>
-            @if ($service->image_url)<img class="service-image" src="{{ $service->image_url }}" alt="" loading="lazy" width="320" height="160">@endif
-            <h3>{{ $service->name }}</h3>
-            @if ($service->description)<p class="service-description">{{ $service->description }}</p>@endif
-            <div class="card-bottom"><div class="service-price"><span class="currency">BDT</span> <strong>{{ number_format((float) $service->price, 2) }}</strong>@if ($service->unit)<span class="billing-unit">/ {{ $service->unit->short_name ?: $service->unit->name }}</span>@endif</div><span class="care-label"><span aria-hidden="true">✓</span> Freshly cared for</span></div>
+        <article class="service-card service-item-card" style="--card-order: {{ $loop->index }}">
+            <div>
+                <div class="card-top card-top-badge">
+                    <span class="service-type service-item-tag">{{ $service->item?->name ?? 'General care' }}</span>
+                    <span class="card-spark text-warning" aria-hidden="true">✦</span>
+                </div>
+                @if ($service->image_url)
+                    <img class="service-image img-fluid rounded-4 mb-3" src="{{ $service->image_url }}" alt="" loading="lazy" style="max-height: 140px; width: 100%; object-fit: cover;">
+                @endif
+                <h3 class="service-card-name">{{ $service->name }}</h3>
+                @if ($service->description)
+                    <p class="service-description service-card-desc">{{ $service->description }}</p>
+                @endif
+            </div>
+
+            <div class="card-bottom service-card-footer">
+                <div class="service-price price-unit-block">
+                    <span class="curr-amount">BDT {{ number_format((float) $service->price, 2) }}</span>
+                    @if ($service->unit)
+                        <span class="curr-label">/ {{ $service->unit->short_name ?: $service->unit->name }}</span>
+                    @endif
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="care-label card-care-pill">
+                        <span aria-hidden="true">✓</span> Freshly cared
+                    </span>
+                    <a href="{{ route('booking.services', ['service_id' => $service->id]) }}"
+                       class="btn-service-card-book text-decoration-none"
+                       title="Book {{ $service->name }}">
+                        Book &rarr;
+                    </a>
+                </div>
+            </div>
         </article>
     @empty
-        <div class="empty-state"><span class="empty-icon" aria-hidden="true">⌕</span><h3>{{ $search !== '' || $selectedItem ? 'No matching services' : 'A little quiet here, for now.' }}</h3><p>{{ $search !== '' || $selectedItem ? 'Try a different search or clear your filters to see more services.' : 'There are no services in this category yet. Explore another category for more care options.' }}</p>@if ($search !== '' || $selectedItem)<a class="reset-button" href="{{ route('services.index', ['category' => $category?->slug ?? 'other-services']) }}" data-reset>Clear filters ↗</a>@endif</div>
+        <div class="empty-state catalog-empty-card">
+            <span class="empty-icon" aria-hidden="true">🔍</span>
+            <h3>{{ $search !== '' || $selectedItem ? 'No matching services' : 'A little quiet here, for now.' }}</h3>
+            <p>{{ $search !== '' || $selectedItem ? 'Try a different search or clear your filters to see more services.' : 'There are no services in this category yet. Explore another category for more care options.' }}</p>
+            @if ($search !== '' || $selectedItem)
+                <a class="reset-button btn btn-sm btn-warning rounded-pill px-3 py-1 fw-bold text-dark" href="{{ route('services.index', ['category' => $category?->slug ?? 'other-services']) }}" data-reset>Clear filters &rarr;</a>
+            @endif
+        </div>
     @endforelse
 </div>
+
 @if ($services->hasPages())
-    <nav class="pagination" aria-label="Service pages"><span>Showing {{ $services->firstItem() ?? 0 }}–{{ $services->lastItem() ?? 0 }} of {{ $services->total() }}</span><div>@if ($services->onFirstPage())<span class="page-button disabled" aria-disabled="true">← Previous</span>@else<a class="page-button" href="{{ $services->previousPageUrl() }}" data-page>← Previous</a>@endif<span class="page-number">{{ $services->currentPage() }} / {{ $services->lastPage() }}</span>@if ($services->hasMorePages())<a class="page-button" href="{{ $services->nextPageUrl() }}" data-page>Next →</a>@else<span class="page-button disabled" aria-disabled="true">Next →</span>@endif</div></nav>
+    <nav class="pagination catalog-pagination-bar" aria-label="Service pages">
+        <span class="pagination-info-text">Showing {{ $services->firstItem() ?? 0 }}–{{ $services->lastItem() ?? 0 }} of {{ $services->total() }}</span>
+        <div class="pagination-btn-group">
+            @if ($services->onFirstPage())
+                <span class="page-button page-nav-pill disabled" aria-disabled="true">&larr; Previous</span>
+            @else
+                <a class="page-button page-nav-pill" href="{{ $services->previousPageUrl() }}" data-page>&larr; Previous</a>
+            @endif
+            <span class="page-number page-num-pill">{{ $services->currentPage() }} / {{ $services->lastPage() }}</span>
+            @if ($services->hasMorePages())
+                <a class="page-button page-nav-pill" href="{{ $services->nextPageUrl() }}" data-page>Next &rarr;</a>
+            @else
+                <span class="page-button page-nav-pill disabled" aria-disabled="true">Next &rarr;</span>
+            @endif
+        </div>
+    </nav>
 @endif
-
-
-
