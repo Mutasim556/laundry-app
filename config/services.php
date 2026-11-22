@@ -43,4 +43,11 @@ return [
         'nominatim_url' => env('NOMINATIM_URL', 'https://nominatim.openstreetmap.org'),
     ],
 
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'currency' => env('STRIPE_CURRENCY', 'gbp'),
+    ],
+
 ];

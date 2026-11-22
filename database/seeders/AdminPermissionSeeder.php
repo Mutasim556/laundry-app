@@ -76,6 +76,45 @@ class AdminPermissionSeeder extends Seeder
                 'delete-stores',
                 'manage-vendors',
             ],
+            'UK Address Management' => [
+                'view-uk-addresses',
+                'create-uk-addresses',
+                'edit-uk-addresses',
+                'delete-uk-addresses',
+                'import-uk-addresses',
+                'export-uk-addresses',
+            ],
+            'Hotel Management' => [
+                'view-hotels',
+                'create-hotels',
+                'edit-hotels',
+                'delete-hotels',
+                'import-hotels',
+                'export-hotels',
+            ],
+            'Booking Schedule Management' => [
+                'view-booking-schedule',
+                'manage-booking-schedule',
+            ],
+            'Booking Fee Management' => [
+                'view-booking-fees',
+                'manage-booking-fees',
+            ],
+            'Payment Management' => [
+                'view-payments',
+                'manage-payments',
+                'refund-payments',
+            ],
+            'Payment Gateway Management' => [
+                'view-payment-gateways',
+                'manage-payment-gateways',
+            ],
+            'Booking Management' => [
+                'view-bookings',
+                'manage-bookings',
+                'cancel-bookings',
+                'override-booking-prices',
+            ],
             'Customers' => [
                 'view-customers',
                 'edit-customers',

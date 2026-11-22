@@ -149,7 +149,7 @@
                 </div>
 
                 <p class="text-muted small mt-4">
-                    <span class="text-warning fw-bold">&#9432;</span> All prices are shown in Bangladeshi Taka (BDT). Billing unit is clearly indicated with each service.
+                    <span class="text-warning fw-bold">&#9432;</span> All prices are shown in {{ currencyCode() }} ({{ currencySymbol() }}). Billing unit is clearly indicated with each service.
                 </p>
             </section>
 

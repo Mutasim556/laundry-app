@@ -134,5 +134,85 @@
             </ul>
         </li>
         @endif
+
+        @can('view-uk-addresses', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.uk-addresses.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.uk-addresses.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.uk-addresses.*') ? 'active' : '' }}">
+                <i class="mdi mdi-map-marker-radius"></i>
+                <span class="hide-menu">UK Address Management</span>
+            </a>
+        </li>
+        @endcan
+
+        @can('view-hotels', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.hotels.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.hotels.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.hotels.*') ? 'active' : '' }}">
+                <i class="mdi mdi-office-building"></i>
+                <span class="hide-menu">Hotel Management</span>
+            </a>
+        </li>
+        @endcan
+
+        @can('view-booking-schedule', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.booking-schedule.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.booking-schedule.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.booking-schedule.*') ? 'active' : '' }}">
+                <i class="mdi mdi-calendar-clock"></i>
+                <span class="hide-menu">Booking Schedule</span>
+            </a>
+        </li>
+        @endcan
+
+        @can('view-payments', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.payments.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.payments.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.payments.*') ? 'active' : '' }}">
+                <i class="mdi mdi-credit-card-outline"></i>
+                <span class="hide-menu">Payments &amp; Bookings</span>
+            </a>
+        </li>
+        @endcan
+
+        @can('view-payment-gateways', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.payment-gateways.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.payment-gateways.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.payment-gateways.*') ? 'active' : '' }}">
+                <i class="mdi mdi-shield-key-outline"></i>
+                <span class="hide-menu">Payment Gateways</span>
+            </a>
+        </li>
+        @endcan
+
+        @can('view-booking-fees', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.booking-fees.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.booking-fees.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.booking-fees.*') ? 'active' : '' }}">
+                <i class="mdi mdi-cash-multiple"></i>
+                <span class="hide-menu">Booking Fee Settings</span>
+            </a>
+        </li>
+        @endcan
+
+        @can('view-bookings', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.bookings.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.bookings.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.bookings.*') ? 'active' : '' }}">
+                <i class="mdi mdi-calendar-check"></i>
+                <span class="hide-menu">Booking Management</span>
+            </a>
+        </li>
+        @endcan
+
+        @can('manage-settings', 'admin')
+        <li class="sidebar-item {{ request()->routeIs('admin.currency-settings.*') ? 'selected' : '' }}">
+            <a href="{{ route('admin.currency-settings.index') }}"
+                class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.currency-settings.*') ? 'active' : '' }}">
+                <i class="mdi mdi-earth"></i>
+                <span class="hide-menu">Country &amp; Currency</span>
+            </a>
+        </li>
+        @endcan
     </ul>
 </nav>

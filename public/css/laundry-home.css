@@ -921,3 +921,17 @@ body.laundry-home-body {
     border-top-left-radius: 24px;
     border-bottom-left-radius: 24px;
 }
+
+
+/* Customer Profile Dropdown Yellow Hover / Active */
+.customer-profile-dropdown .dropdown-item:hover,
+.customer-profile-dropdown .dropdown-item:focus {
+    background-color: #FFF8E5;
+    color: #171717;
+}
+.customer-profile-dropdown .dropdown-item.active,
+.customer-profile-dropdown .dropdown-item:active {
+    background-color: #FFC629;
+    color: #171717;
+    font-weight: 700;
+}

@@ -50,8 +50,9 @@
                 const optName = radio.dataset.optionName || 'Wash & Fold';
                 const optPrice = radio.dataset.optionPrice || '';
                 const optUnit = radio.dataset.optionUnit || 'kg';
+                const activeCurrency = document.getElementById('sectionSelectServices')?.dataset.currency || 'BDT';
                 subtitleEl.textContent = optPrice
-                    ? `${optName} added (BDT ${optPrice} / ${optUnit})`
+                    ? `${optName} added (${activeCurrency} ${optPrice} / ${optUnit})`
                     : `${optName} added`;
                 return;
             }

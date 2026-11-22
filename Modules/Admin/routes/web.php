@@ -139,6 +139,156 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 });
             });
         });
+
+        // UK Address Management
+        Route::prefix('uk-addresses')->name('uk-addresses.')->group(function () {
+            Route::middleware('permission:view-uk-addresses,admin')->group(function () {
+                Route::get('/', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'index'])->name('index');
+                Route::get('data', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'data'])->name('data');
+            });
+            Route::post('/', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'store'])->middleware('permission:create-uk-addresses,admin')->name('store');
+            Route::match(['put', 'patch'], '{ukAddress}', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'update'])->middleware('permission:edit-uk-addresses,admin')->name('update');
+            Route::patch('{ukAddress}/toggle-status', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'toggleStatus'])->middleware('permission:edit-uk-addresses,admin')->name('toggle-status');
+            Route::delete('{ukAddress}', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'destroy'])->middleware('permission:delete-uk-addresses,admin')->name('destroy');
+            Route::get('export', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'export'])->middleware('permission:export-uk-addresses,admin')->name('export');
+            Route::post('import/preview', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'previewCsv'])->middleware('permission:import-uk-addresses,admin')->name('import.preview');
+            Route::post('import/process', [\Modules\Admin\Http\Controllers\UkAddressController::class, 'importCsv'])->middleware('permission:import-uk-addresses,admin')->name('import.process');
+        });
+
+        // Hotel Management
+        Route::prefix('hotels')->name('hotels.')->group(function () {
+            Route::middleware('permission:view-hotels,admin')->group(function () {
+                Route::get('/', [\Modules\Admin\Http\Controllers\HotelController::class, 'index'])->name('index');
+                Route::get('data', [\Modules\Admin\Http\Controllers\HotelController::class, 'data'])->name('data');
+            });
+            Route::post('/', [\Modules\Admin\Http\Controllers\HotelController::class, 'store'])->middleware('permission:create-hotels,admin')->name('store');
+            Route::match(['put', 'patch'], '{hotel}', [\Modules\Admin\Http\Controllers\HotelController::class, 'update'])->middleware('permission:edit-hotels,admin')->name('update');
+            Route::patch('{hotel}/toggle-status', [\Modules\Admin\Http\Controllers\HotelController::class, 'toggleStatus'])->middleware('permission:edit-hotels,admin')->name('toggle-status');
+            Route::delete('{hotel}', [\Modules\Admin\Http\Controllers\HotelController::class, 'destroy'])->middleware('permission:delete-hotels,admin')->name('destroy');
+            Route::get('export', [\Modules\Admin\Http\Controllers\HotelController::class, 'export'])->middleware('permission:export-hotels,admin')->name('export');
+            Route::post('import/preview', [\Modules\Admin\Http\Controllers\HotelController::class, 'previewCsv'])->middleware('permission:import-hotels,admin')->name('import.preview');
+            Route::post('import/process', [\Modules\Admin\Http\Controllers\HotelController::class, 'importCsv'])->middleware('permission:import-hotels,admin')->name('import.process');
+        });
+
+        // Booking Schedule Management
+        Route::prefix('booking-schedule')->name('booking-schedule.')->group(function () {
+            Route::get('/', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'index'])
+                ->middleware('permission:view-booking-schedule,admin')
+                ->name('index');
+
+            Route::middleware('permission:manage-booking-schedule,admin')->group(function () {
+                Route::post('slots', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'storeSlot'])->name('slots.store');
+                Route::put('slots/{slot}', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'updateSlot'])->name('slots.update');
+                Route::patch('slots/{slot}/toggle', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'toggleSlot'])->name('slots.toggle');
+                Route::delete('slots/{slot}', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'destroySlot'])->name('slots.destroy');
+
+                Route::post('instructions', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'storeInstruction'])->name('instructions.store');
+                Route::put('instructions/{instruction}', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'updateInstruction'])->name('instructions.update');
+                Route::patch('instructions/{instruction}/toggle', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'toggleInstruction'])->name('instructions.toggle');
+                Route::delete('instructions/{instruction}', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'destroyInstruction'])->name('instructions.destroy');
+
+                Route::post('settings', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'updateSettings'])->name('settings.update');
+                Route::post('blocked-dates', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'storeBlockedDate'])->name('blocked-dates.store');
+                Route::delete('blocked-dates/{blockedDate}', [\Modules\Admin\Http\Controllers\BookingScheduleController::class, 'destroyBlockedDate'])->name('blocked-dates.destroy');
+            });
+        });
+
+        // Booking Payments & Stripe Management
+        Route::prefix('payments')->name('payments.')->group(function () {
+            Route::get('/', [\Modules\Admin\Http\Controllers\BookingPaymentController::class, 'index'])
+                ->middleware('permission:view-payments,admin')
+                ->name('index');
+            Route::post('{booking}/finalize', [\Modules\Admin\Http\Controllers\BookingPaymentController::class, 'finalizeAndCharge'])
+                ->middleware('permission:manage-payments,admin')
+                ->name('finalize');
+            Route::post('{booking}/retry', [\Modules\Admin\Http\Controllers\BookingPaymentController::class, 'retryCharge'])
+                ->middleware('permission:manage-payments,admin')
+                ->name('retry');
+            Route::post('{booking}/refund', [\Modules\Admin\Http\Controllers\BookingPaymentController::class, 'refund'])
+                ->middleware('permission:refund-payments,admin')
+                ->name('refund');
+        });
+
+        // Dynamic Payment Gateway Management (Stripe, PayPal, COD)
+        Route::prefix('payment-gateways')->name('payment-gateways.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\PaymentGatewayController::class, 'index'])
+                ->middleware('permission:view-payment-gateways,admin')
+                ->name('index');
+            Route::post('/stripe', [\Modules\Admin\App\Http\Controllers\PaymentGatewayController::class, 'updateStripe'])
+                ->middleware('permission:manage-payment-gateways,admin')
+                ->name('stripe.update');
+            Route::post('/paypal', [\Modules\Admin\App\Http\Controllers\PaymentGatewayController::class, 'updatePayPal'])
+                ->middleware('permission:manage-payment-gateways,admin')
+                ->name('paypal.update');
+            Route::post('/cod', [\Modules\Admin\App\Http\Controllers\PaymentGatewayController::class, 'updateCod'])
+                ->middleware('permission:manage-payment-gateways,admin')
+                ->name('cod.update');
+            Route::post('/{gatewayCode}/toggle', [\Modules\Admin\App\Http\Controllers\PaymentGatewayController::class, 'toggleStatus'])
+                ->middleware('permission:manage-payment-gateways,admin')
+                ->name('toggle');
+            Route::post('/{gatewayCode}/test', [\Modules\Admin\App\Http\Controllers\PaymentGatewayController::class, 'testConnection'])
+                ->middleware('permission:manage-payment-gateways,admin')
+                ->name('test');
+            Route::delete('/{gatewayCode}/configuration', [\Modules\Admin\App\Http\Controllers\PaymentGatewayController::class, 'removeConfiguration'])
+                ->middleware('permission:manage-payment-gateways,admin')
+                ->name('remove');
+        });
+
+        // Dynamic Booking Fee Settings (Service Fee & Collection & Delivery Fee)
+        Route::prefix('booking-fees')->name('booking-fees.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\BookingFeeSettingController::class, 'index'])
+                ->middleware('permission:view-booking-fees,admin')
+                ->name('index');
+            Route::post('/service-fee', [\Modules\Admin\App\Http\Controllers\BookingFeeSettingController::class, 'updateServiceFee'])
+                ->middleware('permission:manage-booking-fees,admin')
+                ->name('service-fee.update');
+            Route::post('/delivery-fee', [\Modules\Admin\App\Http\Controllers\BookingFeeSettingController::class, 'updateDeliveryFee'])
+                ->middleware('permission:manage-booking-fees,admin')
+                ->name('delivery-fee.update');
+        });
+
+        // Global Country & Currency Settings
+        Route::prefix('currency-settings')->name('currency-settings.')->middleware('permission:manage-settings,admin')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\CurrencySettingController::class, 'index'])->name('index');
+            Route::post('/', [\Modules\Admin\App\Http\Controllers\CurrencySettingController::class, 'update'])->name('update');
+        });
+
+        // Advanced Admin Booking Management
+        Route::prefix('bookings')->name('bookings.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'index'])
+                ->middleware('permission:view-bookings,admin')
+                ->name('index');
+            Route::get('/{booking}', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'show'])
+                ->middleware('permission:view-bookings,admin')
+                ->name('show');
+            Route::get('/{booking}/edit', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'edit'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('edit');
+            Route::get('/{booking}/categories/{category}/services', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'categoryServices'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('category-services');
+            Route::put('/{booking}', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'update'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('update');
+            Route::post('/{booking}/services', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'addService'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('services.add');
+            Route::post('/{booking}/items', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'addItem'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('items.add');
+            Route::delete('/{booking}/items/{item}', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'removeItem'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('items.remove');
+            Route::post('/{booking}/status', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'updateStatus'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('status.update');
+            Route::post('/{booking}/status/advance', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'advanceStatus'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('status.advance');
+            Route::post('/{booking}/cancel', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'cancel'])
+                ->middleware('permission:cancel-bookings,admin')
+                ->name('cancel');
+        });
     });
 });
 

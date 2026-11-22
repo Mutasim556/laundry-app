@@ -347,7 +347,123 @@
             action: 'update_payment',
             payment_method: methodKey,
         });
+
+        toggleStripePanel(methodKey === 'stripe');
+        document.querySelector('#paypalDetailsPanel')?.classList.toggle('d-none', methodKey !== 'paypal');
+        document.querySelector('#codDetailsPanel')?.classList.toggle('d-none', methodKey !== 'cod');
     };
+
+    // =========================================================================
+    // 5B. Stripe.js Payment Element & SetupIntent Flow
+    // =========================================================================
+    const stripeCardPanel = document.querySelector('#stripeCardPanel');
+    const stripeElementLoading = document.querySelector('#stripeElementLoading');
+    const stripePaymentElementContainer = document.querySelector('#stripePaymentElement');
+    const stripeElementError = document.querySelector('#stripeElementError');
+    const stripeSaveCardCheckbox = document.querySelector('#stripeSaveCardCheckbox');
+    const stripeConsentCheckbox = document.querySelector('#stripeConsentCheckbox');
+    const stripeNewCardWrap = document.querySelector('#stripeNewCardWrap');
+    const savedCardRadios = document.querySelectorAll('.js-saved-card-radio');
+
+    const formInputStripeSetupIntentId = document.querySelector('#formInputStripeSetupIntentId');
+    const formInputStripePaymentMethodId = document.querySelector('#formInputStripePaymentMethodId');
+    const formInputSavedPaymentMethodId = document.querySelector('#formInputSavedPaymentMethodId');
+    const formInputSaveCard = document.querySelector('#formInputSaveCard');
+    const formInputStripeConsent = document.querySelector('#formInputStripeConsent');
+
+    const stripePublishableKey = app.dataset.stripeKey || '';
+    const stripeConfigured = app.dataset.stripeConfigured === '1';
+    const setupIntentUrl = app.dataset.setupIntentUrl || '/booking/stripe/setup-intent';
+
+    let stripeInstance = null;
+    let stripeElements = null;
+    let stripeClientSecret = null;
+    let stripeSetupIntentId = null;
+
+    const initStripeElement = async () => {
+        if (!stripeConfigured || !stripePublishableKey || !window.Stripe || !stripePaymentElementContainer) return;
+        if (stripeElements) return;
+
+        stripeElementLoading?.classList.remove('d-none');
+        stripeElementError?.classList.add('d-none');
+
+        try {
+            const res = await fetch(setupIntentUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({}),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.client_secret) {
+                throw new Error(data.message || 'Unable to initialize Stripe card setup.');
+            }
+
+            stripeClientSecret = data.client_secret;
+            stripeSetupIntentId = data.setup_intent_id;
+            stripeInstance = window.Stripe(stripePublishableKey);
+            stripeElements = stripeInstance.elements({
+                clientSecret: stripeClientSecret,
+                appearance: {
+                    theme: 'stripe',
+                    variables: {
+                        colorPrimary: '#FFC629',
+                        colorBackground: '#FFFFFF',
+                        colorText: '#171717',
+                        borderRadius: '10px',
+                    },
+                },
+            });
+
+            const paymentElement = stripeElements.create('payment');
+            paymentElement.mount('#stripePaymentElement');
+            stripeElementLoading?.classList.add('d-none');
+        } catch (err) {
+            stripeElementLoading?.classList.add('d-none');
+            if (stripeElementError) {
+                stripeElementError.textContent = err.message || 'Failed to load secure card fields.';
+                stripeElementError.classList.remove('d-none');
+            }
+        }
+    };
+
+    const toggleStripePanel = (show) => {
+        if (!stripeCardPanel) return;
+        stripeCardPanel.classList.toggle('d-none', !show);
+        if (show) {
+            initStripeElement();
+        }
+    };
+
+    if (formInputPaymentMethod?.value === 'stripe') {
+        toggleStripePanel(true);
+    }
+
+    savedCardRadios.forEach(r => {
+        r.addEventListener('change', () => {
+            if (!r.checked) return;
+            const usingSaved = r.value !== '';
+            if (formInputSavedPaymentMethodId) formInputSavedPaymentMethodId.value = r.value;
+            stripeNewCardWrap?.classList.toggle('d-none', usingSaved);
+        });
+    });
+
+    document.querySelectorAll('.js-delete-saved-card').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const url = btn.dataset.deleteUrl;
+            if (!url) return;
+            const res = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            });
+            if (res.ok) {
+                btn.closest('div')?.remove();
+            }
+        });
+    });
 
     paymentRadios.forEach(radio => {
         radio.addEventListener('change', () => {
@@ -366,7 +482,7 @@
     // 6. Final Submission ("CONTINUE TO PAYMENT ->") Duplicate-Submit Guard
     // =========================================================================
     let isSubmittingConfirm = false;
-    formBookingConfirm?.addEventListener('submit', (e) => {
+    formBookingConfirm?.addEventListener('submit', async (e) => {
         if (isSubmittingConfirm) {
             e.preventDefault();
             return;
@@ -390,6 +506,71 @@
             if (formInputCustomTipAmount) {
                 formInputCustomTipAmount.value = String(Math.round(val * 100) / 100);
             }
+        }
+
+        // If Stripe is selected, confirm SetupIntent before submitting to Laravel
+        if (formInputPaymentMethod?.value === 'stripe') {
+            e.preventDefault();
+
+            if (!stripeConsentCheckbox?.checked) {
+                if (stripeElementError) {
+                    stripeElementError.textContent = 'Please accept the payment authorization consent above to continue.';
+                    stripeElementError.classList.remove('d-none');
+                }
+                stripeConsentCheckbox?.focus();
+                return;
+            }
+
+            if (formInputStripeConsent) formInputStripeConsent.value = '1';
+            if (formInputSaveCard) formInputSaveCard.value = stripeSaveCardCheckbox?.checked ? '1' : '0';
+
+            const usingSavedCard = (formInputSavedPaymentMethodId?.value || '') !== '';
+            isSubmittingConfirm = true;
+            if (btnConfirmBooking) btnConfirmBooking.disabled = true;
+            if (btnConfirmBookingText) btnConfirmBookingText.textContent = 'AUTHORIZING CARD...';
+            btnConfirmBookingSpinner?.classList.remove('d-none');
+
+            if (usingSavedCard) {
+                formBookingConfirm.submit();
+                return;
+            }
+
+            if (!stripeInstance || !stripeElements) {
+                isSubmittingConfirm = false;
+                if (btnConfirmBooking) btnConfirmBooking.disabled = false;
+                if (btnConfirmBookingText) btnConfirmBookingText.textContent = 'CONTINUE TO PAYMENT →';
+                btnConfirmBookingSpinner?.classList.add('d-none');
+                if (stripeElementError) {
+                    stripeElementError.textContent = 'Stripe card form is not ready. Please wait or select another payment method.';
+                    stripeElementError.classList.remove('d-none');
+                }
+                return;
+            }
+
+            const { setupIntent, error } = await stripeInstance.confirmSetup({
+                elements: stripeElements,
+                redirect: 'if_required',
+            });
+
+            if (error) {
+                isSubmittingConfirm = false;
+                if (btnConfirmBooking) btnConfirmBooking.disabled = false;
+                if (btnConfirmBookingText) btnConfirmBookingText.textContent = 'CONTINUE TO PAYMENT →';
+                btnConfirmBookingSpinner?.classList.add('d-none');
+                if (stripeElementError) {
+                    stripeElementError.textContent = error.message || 'Card setup failed. Please check your details.';
+                    stripeElementError.classList.remove('d-none');
+                }
+                return;
+            }
+
+            if (formInputStripeSetupIntentId) formInputStripeSetupIntentId.value = setupIntent?.id || stripeSetupIntentId || '';
+            if (formInputStripePaymentMethodId) formInputStripePaymentMethodId.value = typeof setupIntent?.payment_method === 'string'
+                ? setupIntent.payment_method
+                : (setupIntent?.payment_method?.id || '');
+
+            formBookingConfirm.submit();
+            return;
         }
 
         isSubmittingConfirm = true;

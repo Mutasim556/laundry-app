@@ -38,16 +38,20 @@
     @php
         $savedSchedule = $booking['schedule'] ?? [];
         $minDays = $minTurnaroundDays ?? 1;
+        $colDates = $collectionDateOptions ?? ($dateOptions ?? []);
+        $delDates = $deliveryDateOptions ?? ($dateOptions ?? []);
+        $colSlots = $collectionTimeSlots ?? ($timeSlots ?? []);
+        $delSlots = $deliveryTimeSlots ?? ($timeSlots ?? []);
 
-        $defaultColDate = $dateOptions[0]['value'] ?? now()->format('Y-m-d');
-        $defaultDelDate = $dateOptions[$minDays]['value'] ?? now()->addDays($minDays)->format('Y-m-d');
+        $defaultColDate = $colDates[0]['value'] ?? now()->format('Y-m-d');
+        $defaultDelDate = $delDates[0]['value'] ?? now()->addDays($minDays)->format('Y-m-d');
 
         $currentColDate = old('collection_date', $savedSchedule['collection_date'] ?? $defaultColDate);
-        $currentColSlot = old('collection_slot', $savedSchedule['collection_slot'] ?? (end($timeSlots) ?: '20:00 - 23:00'));
+        $currentColSlot = old('collection_slot', $savedSchedule['collection_slot'] ?? (end($colSlots) ?: ''));
         $currentColInstr = old('collection_instructions', $savedSchedule['collection_instructions'] ?? ($collectionInstructions[0] ?? 'Collect from me in person'));
 
         $currentDelDate = old('delivery_date', $savedSchedule['delivery_date'] ?? $defaultDelDate);
-        $currentDelSlot = old('delivery_slot', $savedSchedule['delivery_slot'] ?? (end($timeSlots) ?: '20:00 - 23:00'));
+        $currentDelSlot = old('delivery_slot', $savedSchedule['delivery_slot'] ?? (end($delSlots) ?: ''));
         $currentDelInstr = old('delivery_instructions', $savedSchedule['delivery_instructions'] ?? ($deliveryInstructions[0] ?? 'Deliver to me in person'));
 
         $currentDriverNotes = old('driver_notes', $savedSchedule['driver_notes'] ?? '');
@@ -59,11 +63,26 @@
 
     <main class="container booking-main-container"
           id="bookingScheduleApp"
-          data-min-turnaround-days="{{ $minDays }}">
+          data-min-turnaround-days="{{ $minDays }}"
+          data-available-dates-url="{{ route('booking.available-dates') }}"
+          data-available-slots-url="{{ route('booking.available-slots') }}"
+          data-driver-instructions-url="{{ route('booking.driver-instructions') }}"
+          data-address-type="{{ $addressType ?? 'HOME' }}">
         <div class="booking-card-shell mx-auto">
 
             <!-- Clickable 5-Step Booking Progress Bar -->
             @include('booking.partials.progress-bar', ['currentBookingStep' => 3, 'bookingSteps' => $bookingSteps ?? null])
+
+            <!-- Admin-Deactivated Saved Selection Notice -->
+            @if (!empty($disabledNotices))
+                <div class="alert alert-warning rounded-4 border-0 shadow-sm mb-3 py-2 px-3 small fw-semibold" role="alert">
+                    <ul class="mb-0 ps-3">
+                        @foreach ($disabledNotices as $notice)
+                            <li>{{ $notice }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
 
             <!-- Server-Side Validation Alert -->
             @if ($errors->any())
@@ -122,7 +141,7 @@
                                         name="collection_date"
                                         class="form-select schedule-custom-select"
                                         required>
-                                    @foreach ($dateOptions as $opt)
+                                    @foreach ($colDates as $opt)
                                         <option value="{{ $opt['value'] }}"
                                                 data-day-offset="{{ $opt['day_offset'] }}"
                                                 @selected($currentColDate === $opt['value'])>
@@ -147,11 +166,13 @@
                                         name="collection_slot"
                                         class="form-select schedule-custom-select"
                                         required>
-                                    @foreach ($timeSlots as $slot)
+                                    @forelse ($colSlots as $slot)
                                         <option value="{{ $slot }}" @selected($currentColSlot === $slot)>
                                             {{ $slot }}
                                         </option>
-                                    @endforeach
+                                    @empty
+                                        <option value="" disabled selected>No slots available</option>
+                                    @endforelse
                                 </select>
                             </div>
                         </div>
@@ -206,7 +227,7 @@
                                         name="delivery_date"
                                         class="form-select schedule-custom-select"
                                         required>
-                                    @foreach ($dateOptions as $opt)
+                                    @foreach ($delDates as $opt)
                                         <option value="{{ $opt['value'] }}"
                                                 data-day-offset="{{ $opt['day_offset'] }}"
                                                 @selected($currentDelDate === $opt['value'])>
@@ -231,11 +252,13 @@
                                         name="delivery_slot"
                                         class="form-select schedule-custom-select"
                                         required>
-                                    @foreach ($timeSlots as $slot)
+                                    @forelse ($delSlots as $slot)
                                         <option value="{{ $slot }}" @selected($currentDelSlot === $slot)>
                                             {{ $slot }}
                                         </option>
-                                    @endforeach
+                                    @empty
+                                        <option value="" disabled selected>No slots available</option>
+                                    @endforelse
                                 </select>
                             </div>
                         </div>
@@ -381,7 +404,104 @@
 
         const form = document.querySelector('#formBookingSchedule');
 
-        // 1. Enforce minimum turnaround time between Collection Day and Delivery Day
+        const availableDatesUrl = app?.dataset.availableDatesUrl || '';
+        const availableSlotsUrl = app?.dataset.availableSlotsUrl || '';
+
+        const populateSelectSlots = (selectEl, slots, preferredVal) => {
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+            if (!Array.isArray(slots) || slots.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'No slots available';
+                opt.disabled = true;
+                opt.selected = true;
+                selectEl.appendChild(opt);
+                selectEl.disabled = true;
+                return;
+            }
+            selectEl.disabled = false;
+            let matched = false;
+            slots.forEach(s => {
+                const label = typeof s === 'string' ? s : s.label;
+                const opt = document.createElement('option');
+                opt.value = label;
+                opt.textContent = label;
+                if (preferredVal && label === preferredVal) {
+                    opt.selected = true;
+                    matched = true;
+                }
+                selectEl.appendChild(opt);
+            });
+            if (!matched && selectEl.options.length > 0) {
+                selectEl.selectedIndex = 0;
+            }
+        };
+
+        const fetchSlotsForDate = async (type, dateYmd, selectEl) => {
+            if (!availableSlotsUrl || !dateYmd || !selectEl) return;
+            const prevVal = selectEl.value;
+            selectEl.disabled = true;
+            try {
+                const url = new URL(availableSlotsUrl, window.location.origin);
+                url.searchParams.set('type', type);
+                url.searchParams.set('date', dateYmd);
+                const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+                if (!res.ok) throw new Error('Failed to load slots');
+                const data = await res.json();
+                populateSelectSlots(selectEl, data.slots || [], prevVal);
+            } catch (_) {
+                selectEl.disabled = false;
+            }
+        };
+
+        const fetchEligibleDeliveryDates = async (colDateYmd) => {
+            if (!availableDatesUrl || !colDateYmd || !delDateSelect) return;
+            const prevDelDate = delDateSelect.value;
+            delDateSelect.disabled = true;
+            try {
+                const url = new URL(availableDatesUrl, window.location.origin);
+                url.searchParams.set('type', 'delivery');
+                url.searchParams.set('collection_date', colDateYmd);
+                const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+                if (!res.ok) throw new Error('Failed to load dates');
+                const data = await res.json();
+                const dates = Array.isArray(data.dates) ? data.dates : [];
+                delDateSelect.innerHTML = '';
+                if (dates.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = 'No delivery dates available';
+                    opt.disabled = true;
+                    opt.selected = true;
+                    delDateSelect.appendChild(opt);
+                    delDateSelect.disabled = true;
+                    populateSelectSlots(delSlotSelect, [], '');
+                    return;
+                }
+                delDateSelect.disabled = false;
+                let matched = false;
+                dates.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.value;
+                    opt.textContent = d.label;
+                    opt.dataset.dayOffset = String(d.day_offset);
+                    if (prevDelDate && d.value === prevDelDate) {
+                        opt.selected = true;
+                        matched = true;
+                    }
+                    delDateSelect.appendChild(opt);
+                });
+                if (!matched && delDateSelect.options.length > 0) {
+                    delDateSelect.selectedIndex = 0;
+                }
+                await fetchSlotsForDate('delivery', delDateSelect.value, delSlotSelect);
+            } catch (_) {
+                delDateSelect.disabled = false;
+            }
+        };
+
+        // 1. Enforce minimum turnaround time & dynamically reload slots/dates
         const syncEligibleDeliveryDates = (autoAdvance = true) => {
             if (!colDateSelect || !delDateSelect) return;
 
@@ -411,12 +531,15 @@
             }
         };
 
-        colDateSelect?.addEventListener('change', () => {
+        colDateSelect?.addEventListener('change', async () => {
             turnaroundError?.classList.add('d-none');
-            syncEligibleDeliveryDates(true);
+            await Promise.all([
+                fetchSlotsForDate('collection', colDateSelect.value, colSlotSelect),
+                fetchEligibleDeliveryDates(colDateSelect.value),
+            ]);
         });
 
-        delDateSelect?.addEventListener('change', () => {
+        delDateSelect?.addEventListener('change', async () => {
             const colOffset = parseInt(colDateSelect.options[colDateSelect.selectedIndex]?.dataset.dayOffset || '0', 10);
             const delOffset = parseInt(delDateSelect.options[delDateSelect.selectedIndex]?.dataset.dayOffset || '0', 10);
             if (delOffset < colOffset + minTurnaroundDays) {
@@ -426,6 +549,7 @@
                 }
             } else {
                 turnaroundError?.classList.add('d-none');
+                await fetchSlotsForDate('delivery', delDateSelect.value, delSlotSelect);
             }
         });
 

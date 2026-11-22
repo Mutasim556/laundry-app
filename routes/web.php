@@ -1,6 +1,11 @@
 <?php
 
 use App\Http\Controllers\BookingAddressController;
+use App\Http\Controllers\CustomerAccountController;
+use App\Http\Controllers\CustomerAuthController;
+use App\Http\Controllers\CustomerBookingController;
+use App\Http\Controllers\PayPalPaymentController;
+use App\Http\Controllers\StripePaymentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
@@ -80,6 +85,14 @@ Route::get('/services', function (Request $request) {
     return view('services.index', $data);
 })->name('services.index');
 
+// Public Postcode & Hotel Search APIs (rate-limited)
+Route::get('/api/addresses/search', [BookingAddressController::class, 'apiSearchAddresses'])
+    ->middleware('throttle:60,1')
+    ->name('api.addresses.search');
+Route::get('/api/hotels/search', [BookingAddressController::class, 'searchHotels'])
+    ->middleware('throttle:60,1')
+    ->name('api.hotels.search');
+
 // Booking Flow: 5-Step Connected Progress Workflow
 Route::prefix('booking')->name('booking.')->group(function () {
     // Step 1: Select Services
@@ -89,12 +102,15 @@ Route::prefix('booking')->name('booking.')->group(function () {
     // Step 2: Collection Address / Hotel
     Route::get('/address', [BookingAddressController::class, 'showAddressStep'])->name('address');
     Route::post('/address', [BookingAddressController::class, 'storeAddress'])->name('address.store');
-    Route::get('/postcode-lookup', [BookingAddressController::class, 'lookupPostcode'])->name('postcode.lookup');
-    Route::get('/hotel-search', [BookingAddressController::class, 'searchHotels'])->name('hotel.search');
+    Route::get('/postcode-lookup', [BookingAddressController::class, 'lookupPostcode'])->middleware('throttle:60,1')->name('postcode.lookup');
+    Route::get('/hotel-search', [BookingAddressController::class, 'searchHotels'])->middleware('throttle:60,1')->name('hotel.search');
 
     // Step 3: Schedule Collection & Delivery
     Route::get('/schedule', [BookingAddressController::class, 'showScheduleStep'])->name('schedule');
     Route::post('/schedule', [BookingAddressController::class, 'storeScheduleStep'])->name('schedule.store');
+    Route::get('/available-dates', [BookingAddressController::class, 'getAvailableDates'])->middleware('throttle:60,1')->name('available-dates');
+    Route::get('/available-slots', [BookingAddressController::class, 'getAvailableSlots'])->middleware('throttle:60,1')->name('available-slots');
+    Route::get('/driver-instructions', [BookingAddressController::class, 'getDriverInstructions'])->middleware('throttle:60,1')->name('driver-instructions');
 
     // Step 4: Customer Details & Notes
     Route::get('/details', [BookingAddressController::class, 'showDetailsStep'])->name('details');
@@ -104,6 +120,69 @@ Route::prefix('booking')->name('booking.')->group(function () {
     Route::get('/confirm', [BookingAddressController::class, 'showConfirmStep'])->name('confirm');
     Route::post('/confirm', [BookingAddressController::class, 'storeConfirmStep'])->name('confirm.store');
     Route::post('/confirm/options', [BookingAddressController::class, 'updateConfirmOptions'])->name('confirm.options');
+    Route::get('/success/{reference}', [CustomerBookingController::class, 'success'])->name('success');
+
+    // Stripe SetupIntent & Saved Cards
+    Route::post('/stripe/setup-intent', [StripePaymentController::class, 'createSetupIntent'])
+        ->middleware('throttle:30,1')
+        ->name('stripe.setup-intent');
+    Route::get('/stripe/saved-cards', [StripePaymentController::class, 'savedCards'])
+        ->middleware('auth:web')
+        ->name('stripe.saved-cards');
+    Route::delete('/stripe/saved-cards/{paymentMethod}', [StripePaymentController::class, 'destroySavedCard'])
+        ->middleware('auth:web')
+        ->name('stripe.saved-cards.destroy');
+
+    // PayPal Order & Capture
+    Route::post('/paypal/bookings/{booking}/order', [PayPalPaymentController::class, 'createOrder'])
+        ->middleware('throttle:30,1')
+        ->name('paypal.order');
+    Route::get('/paypal/bookings/{booking}/capture', [PayPalPaymentController::class, 'captureReturn'])
+        ->name('paypal.capture');
+});
+
+// Stripe & PayPal Webhook Endpoints (CSRF-exempt; signature verified)
+Route::post('/stripe/webhook', [StripePaymentController::class, 'webhook'])->name('stripe.webhook');
+Route::post('/paypal/webhook', [PayPalPaymentController::class, 'webhook'])->name('paypal.webhook');
+
+// Customer Order History & Read-Only Booking Details (modifications/deletions blocked)
+Route::prefix('my-orders')->name('orders.')->group(function () {
+    Route::get('/', [CustomerBookingController::class, 'index'])->name('index');
+    Route::post('/lookup', [CustomerBookingController::class, 'lookup'])->middleware('throttle:20,1')->name('lookup');
+    Route::get('/{reference}', [CustomerBookingController::class, 'show'])->name('show');
+    Route::match(['put', 'patch'], '/{reference}', [CustomerBookingController::class, 'rejectMutation'])->name('update');
+    Route::delete('/{reference}', [CustomerBookingController::class, 'rejectMutation'])->name('destroy');
+});
+
+// Customer Email-OTP Authentication (Passwordless, web guard)
+Route::get('/login', [CustomerAuthController::class, 'showLogin'])->name('login');
+Route::post('/login/otp', [CustomerAuthController::class, 'sendOtp'])->name('customer.login.send-otp');
+Route::get('/login/verify', [CustomerAuthController::class, 'showOtpForm'])->name('customer.otp.show');
+Route::post('/login/verify', [CustomerAuthController::class, 'verifyOtp'])->name('customer.otp.verify');
+Route::post('/login/resend', [CustomerAuthController::class, 'resendOtp'])->name('customer.otp.resend');
+Route::get('/register/complete', [CustomerAuthController::class, 'showRegister'])->name('customer.register.show');
+Route::post('/register/complete', [CustomerAuthController::class, 'completeRegister'])->name('customer.register.store');
+Route::post('/logout', [CustomerAuthController::class, 'logout'])->name('logout');
+
+// Authenticated Customer Account Pages (inside main website layout)
+Route::middleware('auth:web')->group(function () {
+    Route::get('/profile', [CustomerAccountController::class, 'profile'])->name('account.profile');
+    Route::post('/profile', [CustomerAccountController::class, 'updateProfile'])->name('account.profile.update');
+    Route::post('/my-orders/claim', [CustomerAccountController::class, 'claimGuestOrder'])->name('orders.claim');
+
+    Route::get('/address-book', [CustomerAccountController::class, 'addresses'])->name('account.addresses');
+    Route::get('/address-book/create', [CustomerAccountController::class, 'createAddress'])->name('account.addresses.create');
+    Route::post('/address-book', [CustomerAccountController::class, 'storeAddress'])->name('account.addresses.store');
+    Route::get('/address-book/{address}/edit', [CustomerAccountController::class, 'editAddress'])->name('account.addresses.edit');
+    Route::put('/address-book/{address}', [CustomerAccountController::class, 'updateAddress'])->name('account.addresses.update');
+    Route::post('/address-book/{address}/default', [CustomerAccountController::class, 'setDefaultAddress'])->name('account.addresses.default');
+    Route::delete('/address-book/{address}', [CustomerAccountController::class, 'destroyAddress'])->name('account.addresses.destroy');
+
+    Route::get('/saved-payment-methods', [CustomerAccountController::class, 'paymentMethods'])->name('account.payment-methods');
+    Route::post('/saved-payment-methods/setup-intent', [CustomerAccountController::class, 'createSetupIntent'])->name('account.payment-methods.setup-intent');
+    Route::post('/saved-payment-methods/attach', [CustomerAccountController::class, 'attachCard'])->name('account.payment-methods.attach');
+    Route::post('/saved-payment-methods/{paymentMethod}/default', [CustomerAccountController::class, 'setDefaultCard'])->name('account.payment-methods.default');
+    Route::delete('/saved-payment-methods/{paymentMethod}', [CustomerAccountController::class, 'destroyCard'])->name('account.payment-methods.destroy');
 });
 
 
