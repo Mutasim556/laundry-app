@@ -118,6 +118,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('geo/local-areas', [\Modules\Admin\Http\Controllers\StoreController::class, 'getLocalAreas'])->name('geo.local-areas');
 
             // Stores Management
+            Route::get('uk-postcodes', [\Modules\Admin\Http\Controllers\StoreController::class, 'ukPostcodes'])
+                ->middleware('permission:view-stores|create-stores|edit-stores,admin')
+                ->name('uk-postcodes');
+
             Route::middleware('permission:view-stores,admin')->group(function () {
                 Route::get('/', [\Modules\Admin\Http\Controllers\StoreController::class, 'index'])->name('index');
                 Route::get('data', [\Modules\Admin\Http\Controllers\StoreController::class, 'data'])->name('data');
@@ -126,6 +130,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/', [\Modules\Admin\Http\Controllers\StoreController::class, 'store'])->middleware('permission:create-stores,admin')->name('store');
             Route::match(['put', 'patch'], '{store}', [\Modules\Admin\Http\Controllers\StoreController::class, 'update'])->middleware('permission:edit-stores,admin')->name('update');
             Route::patch('{store}/toggle-orders', [\Modules\Admin\Http\Controllers\StoreController::class, 'toggleAcceptingOrders'])->middleware('permission:edit-stores,admin')->name('toggle-orders');
+            Route::patch('{store}/toggle-status', [\Modules\Admin\Http\Controllers\StoreController::class, 'toggleStatus'])->middleware('permission:edit-stores,admin')->name('toggle-status');
             Route::delete('{store}', [\Modules\Admin\Http\Controllers\StoreController::class, 'destroy'])->middleware('permission:delete-stores,admin')->name('destroy');
 
             // Vendors Management
@@ -135,9 +140,62 @@ Route::prefix('admin')->name('admin.')->group(function () {
                     Route::get('data', [\Modules\Admin\Http\Controllers\VendorController::class, 'data'])->name('data');
                     Route::post('/', [\Modules\Admin\Http\Controllers\VendorController::class, 'store'])->name('store');
                     Route::match(['put', 'patch'], '{vendor}', [\Modules\Admin\Http\Controllers\VendorController::class, 'update'])->name('update');
+                    Route::patch('{vendor}/toggle-status', [\Modules\Admin\Http\Controllers\VendorController::class, 'toggleStatus'])->name('toggle-status');
                     Route::delete('{vendor}', [\Modules\Admin\Http\Controllers\VendorController::class, 'destroy'])->name('destroy');
                 });
             });
+        });
+
+        // Delivery Persons Management
+        Route::prefix('delivery-persons')->name('delivery-persons.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'index'])
+                ->middleware('permission:view-delivery-persons,admin')->name('index');
+            Route::get('create', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'create'])
+                ->middleware('permission:create-delivery-persons,admin')->name('create');
+            Route::post('/', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'store'])
+                ->middleware('permission:create-delivery-persons,admin')->name('store');
+            Route::get('{deliveryPerson}', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'show'])
+                ->middleware('permission:view-delivery-persons,admin')->name('show');
+            Route::get('{deliveryPerson}/edit', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'edit'])
+                ->middleware('permission:edit-delivery-persons,admin')->name('edit');
+            Route::match(['put', 'patch'], '{deliveryPerson}', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'update'])
+                ->middleware('permission:edit-delivery-persons,admin')->name('update');
+            Route::patch('{deliveryPerson}/toggle-status', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'toggleStatus'])
+                ->middleware('permission:edit-delivery-persons,admin')->name('toggle-status');
+            Route::delete('{deliveryPerson}', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'destroy'])
+                ->middleware('permission:delete-delivery-persons,admin')->name('destroy');
+            Route::get('{deliveryPerson}/documents/{document}/{side?}', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'downloadDocument'])
+                ->middleware('permission:view-delivery-documents,admin')->name('documents.download');
+            Route::patch('{deliveryPerson}/documents/{document}/verify', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'verifyDocument'])
+                ->middleware('permission:view-delivery-documents,admin')->name('documents.verify');
+        });
+
+        // Delivery Assignments & Activity
+        Route::prefix('delivery-assignments')->name('delivery-assignments.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryAssignmentController::class, 'index'])
+                ->middleware('permission:manage-delivery-assignments|view-delivery-persons,admin')->name('index');
+            Route::get('eligible-persons', [\Modules\Admin\App\Http\Controllers\DeliveryAssignmentController::class, 'eligiblePersons'])
+                ->middleware('permission:manage-delivery-assignments|view-delivery-persons,admin')->name('eligible-persons');
+            Route::post('/', [\Modules\Admin\App\Http\Controllers\DeliveryAssignmentController::class, 'store'])
+                ->middleware('permission:manage-delivery-assignments,admin')->name('store');
+            Route::patch('{assignment}/transition', [\Modules\Admin\App\Http\Controllers\DeliveryAssignmentController::class, 'transition'])
+                ->middleware('permission:manage-delivery-assignments,admin')->name('transition');
+            Route::patch('{assignment}/cod', [\Modules\Admin\App\Http\Controllers\DeliveryAssignmentController::class, 'recordCod'])
+                ->middleware('permission:manage-delivery-assignments,admin')->name('cod');
+        });
+
+        Route::get('delivery-activity', [\Modules\Admin\App\Http\Controllers\DeliveryAssignmentController::class, 'activity'])
+            ->middleware('permission:view-delivery-persons|manage-delivery-assignments,admin')
+            ->name('delivery-activity.index');
+
+        // Delivery Account Balances & Payouts
+        Route::prefix('delivery-payouts')->name('delivery-payouts.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryPayoutController::class, 'index'])
+                ->middleware('permission:manage-delivery-payouts|view-delivery-persons,admin')->name('index');
+            Route::post('/', [\Modules\Admin\App\Http\Controllers\DeliveryPayoutController::class, 'store'])
+                ->middleware('permission:manage-delivery-payouts,admin')->name('store');
+            Route::post('adjustments', [\Modules\Admin\App\Http\Controllers\DeliveryPayoutController::class, 'storeAdjustment'])
+                ->middleware('permission:manage-delivery-payouts,admin')->name('adjustments.store');
         });
 
         // UK Address Management
@@ -285,6 +343,24 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{booking}/status/advance', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'advanceStatus'])
                 ->middleware('permission:manage-bookings,admin')
                 ->name('status.advance');
+            Route::get('/{booking}/stores/search', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'searchStores'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('stores.search');
+            Route::post('/{booking}/assign-store', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'assignStore'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('assign-store');
+            Route::get('/{booking}/couriers/search', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'searchCouriers'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('couriers.search');
+            Route::post('/{booking}/assign-courier', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'assignCourier'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('assign-courier');
+            Route::get('/{booking}/invoice/preview', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'invoicePreview'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('invoice.preview');
+            Route::get('/{booking}/invoice/print', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'invoicePrint'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('invoice.print');
             Route::post('/{booking}/cancel', [\Modules\Admin\App\Http\Controllers\BookingManagementController::class, 'cancel'])
                 ->middleware('permission:cancel-bookings,admin')
                 ->name('cancel');

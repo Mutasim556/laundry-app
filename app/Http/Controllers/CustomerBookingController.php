@@ -114,7 +114,13 @@ class CustomerBookingController extends Controller
         abort_unless($this->canAccessBooking($request, $booking), 403, 'You are not authorized to view this booking.');
 
         $booking->syncOperationalItemsFromSnapshotIfEmpty($currencyService);
-        $booking->load(['operationalItems.category', 'operationalItems.item']);
+        $booking->load([
+            'operationalItems.category',
+            'operationalItems.item',
+            'currentStoreAssignment',
+            'currentCollectionAssignment.deliveryPerson',
+            'currentFinalDeliveryAssignment.deliveryPerson',
+        ]);
 
         $pricingSummary = $booking->getOperationalPricingSummary($currencyService);
         $categoryGroups = $booking->getActiveOperationalCategoryGroups();

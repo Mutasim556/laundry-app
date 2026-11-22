@@ -1,0 +1,856 @@
+/* ==========================================================================
+   Admin Left Sidebar: Dark Navbar (skin5) + Feather Icons + Yellow Accent (#FFC629)
+   ========================================================================== */
+
+#main-wrapper[data-layout="vertical"] .left-sidebar,
+#main-wrapper[data-layout="vertical"] .left-sidebar[data-sidebarbg="skin5"] {
+    background: #1d2126 !important;
+    background-color: #1d2126 !important;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .scroll-sidebar,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav,
+#main-wrapper[data-layout="vertical"] .left-sidebar[data-sidebarbg="skin5"] .sidebar-nav ul {
+    background: #1d2126 !important;
+    background-color: #1d2126 !important;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav > ul {
+    padding: 10px 10px 24px;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item {
+    margin-bottom: 3px;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .sidebar-link,
+#main-wrapper[data-layout="vertical"] .left-sidebar[data-sidebarbg="skin5"] .sidebar-nav ul .sidebar-item .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.86) !important;
+    opacity: 1;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.35;
+    transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .sidebar-link:hover,
+#main-wrapper[data-layout="vertical"] .left-sidebar[data-sidebarbg="skin5"] .sidebar-nav ul .sidebar-item .sidebar-link:hover {
+    background-color: rgba(255, 198, 41, 0.14) !important;
+    color: #ffffff !important;
+}
+
+/* Consistent 18px Feather SVG Icons on Dark Sidebar */
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .sidebar-link svg.sidebar-icon,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .sidebar-link svg.feather {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    flex-shrink: 0;
+    stroke: rgba(255, 255, 255, 0.72) !important;
+    stroke-width: 2;
+    fill: none;
+    display: inline-block;
+    transition: stroke 0.18s ease;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .sidebar-link:hover svg.sidebar-icon,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .sidebar-link:hover svg.feather {
+    stroke: #ffc629 !important;
+}
+
+/* Active & Selected States (Yellow Accent #FFC629 with Dark #171717 Text/Icon) */
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item.selected > .sidebar-link,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item > .sidebar-link.active,
+#main-wrapper[data-layout="vertical"] .left-sidebar[data-sidebarbg="skin5"] .sidebar-nav ul .sidebar-item.selected > .sidebar-link,
+#main-wrapper[data-layout="vertical"] .left-sidebar[data-sidebarbg="skin5"] .sidebar-nav ul .sidebar-item > .sidebar-link.active {
+    background-color: #ffc629 !important;
+    color: #171717 !important;
+    font-weight: 600;
+    box-shadow: 0 3px 10px rgba(255, 198, 41, 0.25);
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item.selected > .sidebar-link svg.sidebar-icon,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item.selected > .sidebar-link svg.feather,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item > .sidebar-link.active svg.sidebar-icon,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item > .sidebar-link.active svg.feather {
+    stroke: #171717 !important;
+}
+
+/* Submenu Indentation & Visible Submenu Icons */
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level {
+    padding: 4px 0 4px 12px !important;
+    background-color: transparent !important;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item {
+    margin-bottom: 2px;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item .sidebar-link {
+    padding: 7px 12px 7px 14px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.76) !important;
+    border-radius: 8px;
+    background-color: transparent !important;
+    box-shadow: none;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item .sidebar-link:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item .sidebar-link svg.sidebar-icon,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item .sidebar-link svg.feather {
+    display: inline-block !important;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    stroke: rgba(255, 255, 255, 0.65) !important;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item.active > .sidebar-link,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item .sidebar-link.active {
+    background-color: rgba(255, 198, 41, 0.16) !important;
+    color: #ffc629 !important;
+    font-weight: 600;
+    border-left: 3px solid #ffc629;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item.active > .sidebar-link svg,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav ul .sidebar-item .first-level .sidebar-item .sidebar-link.active svg {
+    stroke: #ffc629 !important;
+}
+
+/* Dropdown Arrow Color on Dark Sidebar */
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav .has-arrow::after {
+    border-color: rgba(255, 255, 255, 0.65);
+    right: 14px;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav .sidebar-item.selected > .has-arrow::after,
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-nav .has-arrow.active::after {
+    border-color: #171717;
+}
+
+/* Sidebar Footer */
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-footer,
+#main-wrapper[data-layout="vertical"] .left-sidebar[data-sidebarbg="skin5"] .sidebar-footer {
+    background: #1d2126 !important;
+    background-color: #1d2126 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-footer .link {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+#main-wrapper[data-layout="vertical"] .left-sidebar .sidebar-footer .link:hover {
+    color: #ffc629;
+}
+
+/* Mini-sidebar collapsed state alignment */
+@media (min-width: 768px) {
+    #main-wrapper[data-layout="vertical"][data-sidebartype="mini-sidebar"] .left-sidebar .sidebar-nav ul .sidebar-item .sidebar-link {
+        justify-content: center;
+        padding: 10px 8px;
+    }
+
+    #main-wrapper[data-layout="vertical"][data-sidebartype="mini-sidebar"] .left-sidebar:hover .sidebar-nav ul .sidebar-item .sidebar-link {
+        justify-content: flex-start;
+        padding: 9px 12px;
+    }
+}
+
+
+/* =========================================================
+   Store Management - UK Postcode Select2 (Bootstrap 5 Theme)
+   ========================================================= */
+.select2-container--default .select2-selection--single {
+    height: 42px;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    padding: 0 2.6rem 0 0.75rem;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: #171717;
+    background-color: #ffffff;
+    border: 1px solid #dbe2ea;
+    border-radius: 0.5rem;
+    position: relative;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.select2-container--default.select2-container--open .select2-selection--single,
+.select2-container--default.select2-container--focus .select2-selection--single,
+.select2-container--default.select2-container--open .select2-selection--multiple,
+.select2-container--default.select2-container--focus .select2-selection--multiple {
+    border-color: #ffc629;
+    box-shadow: 0 0 0 0.22rem rgba(255, 198, 41, 0.24);
+    outline: 0;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #171717;
+    line-height: 1.4;
+    padding-left: 0;
+    padding-right: 0;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: #64748b;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px;
+    top: 1px;
+    right: 0.55rem;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__clear {
+    position: absolute;
+    right: 1.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    margin: 0;
+    font-size: 1.15rem;
+    line-height: 1;
+    z-index: 2;
+}
+
+.select2-container--default .select2-selection--multiple {
+    min-height: 42px;
+    padding: 0.28rem 0.5rem;
+    border: 1px solid #dbe2ea;
+    border-radius: 0.5rem;
+    background-color: #ffffff;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+    background-color: #fff8e5;
+    border: 1px solid rgba(255, 198, 41, 0.75);
+    color: #171717;
+    border-radius: 0.4rem;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: #b45309;
+    margin-right: 0.35rem;
+    border-right: 0;
+}
+
+.select2-container--open {
+    z-index: 1065;
+}
+
+.select2-container--default .select2-dropdown {
+    background-color: #ffffff;
+    border: 1px solid #ffc629;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(23, 23, 23, 0.12);
+    overflow: hidden;
+}
+
+.select2-container--default .select2-search--dropdown {
+    padding: 0.5rem;
+    background-color: #fff8e5;
+    border-bottom: 1px solid rgba(255, 198, 41, 0.35);
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    color: #171717;
+    background-color: #ffffff;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field:focus {
+    border-color: #ffc629;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(255, 198, 41, 0.25);
+}
+
+.select2-container--default .select2-results__option {
+    padding: 0.45rem 0.75rem;
+    color: #171717;
+    font-size: 0.925rem;
+}
+
+.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+    background-color: #ffc629;
+    color: #171717;
+    font-weight: 600;
+}
+
+.select2-container--default .select2-results__option--selected {
+    background-color: #fff8e5;
+    color: #171717;
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   International Store & Vendor SaaS Dashboard Theme
+   ========================================================= */
+.saas-page-shell {
+    background-color: #f6f8fc;
+    min-height: calc(100vh - 80px);
+}
+
+.saas-header-card {
+    background: linear-gradient(135deg, #ffffff 0%, #fffdf7 100%);
+    border: 1px solid rgba(23, 23, 23, 0.07);
+    border-left: 4px solid #ffc629;
+    border-radius: 0.85rem;
+    padding: 0.7rem 1.15rem;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+    margin-bottom: 0.75rem;
+}
+
+.saas-header-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #171717;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.1rem;
+    line-height: 1.2;
+}
+
+.saas-header-subtitle {
+    color: #64748b;
+    font-size: 0.8rem;
+    margin-bottom: 0;
+}
+
+.btn-saas-primary {
+    background-color: #ffc629;
+    color: #171717 !important;
+    border: 1px solid #f5b800;
+    border-radius: 0.55rem;
+    min-height: 38px;
+    padding: 0.45rem 1rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(255, 198, 41, 0.25);
+    transition: all 0.18s ease;
+}
+
+.btn-saas-primary:hover,
+.btn-saas-primary:focus {
+    background-color: #f5b800;
+    color: #171717 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(255, 198, 41, 0.35);
+}
+
+.saas-header-card .btn {
+    min-height: 38px;
+    font-size: 0.85rem;
+    padding: 0.45rem 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.saas-stat-card {
+    background: #ffffff;
+    border: 1px solid rgba(23, 23, 23, 0.06);
+    border-radius: 0.85rem;
+    padding: 0.7rem 0.95rem;
+    min-height: 76px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    height: 100%;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.saas-stat-card.tint-blue { background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%); border-color: rgba(59, 130, 246, 0.18); }
+.saas-stat-card.tint-green { background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%); border-color: rgba(16, 185, 129, 0.18); }
+.saas-stat-card.tint-amber { background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%); border-color: rgba(245, 158, 11, 0.22); }
+.saas-stat-card.tint-purple { background: linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%); border-color: rgba(139, 92, 246, 0.18); }
+
+.saas-stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.saas-stat-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 0.15rem;
+}
+
+.saas-stat-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #171717;
+    line-height: 1.1;
+}
+
+.saas-stat-hint {
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-top: 0.1rem;
+}
+
+.saas-stat-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}
+
+.saas-stat-icon.blue { background: rgba(59, 130, 246, 0.14); color: #2563eb; }
+.saas-stat-icon.green { background: rgba(16, 185, 129, 0.14); color: #059669; }
+.saas-stat-icon.amber { background: rgba(245, 158, 11, 0.16); color: #d97706; }
+.saas-stat-icon.purple { background: rgba(139, 92, 246, 0.14); color: #7c3aed; }
+.saas-stat-icon.yellow { background: #fff8e5; color: #d97706; border: 1px solid rgba(255, 198, 41, 0.45); }
+
+.saas-surface-card {
+    background: #ffffff;
+    border: 1px solid rgba(23, 23, 23, 0.06);
+    border-radius: 1rem;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+}
+
+.saas-filter-bar {
+    background: #ffffff;
+    border-bottom: 1px solid #eef2f7;
+    padding: 0.65rem 1rem;
+}
+
+.saas-filter-bar .form-control,
+.saas-filter-bar .form-select,
+.saas-filter-bar .btn {
+    height: 38px;
+    min-height: 38px;
+    border-radius: 0.5rem;
+    font-size: 0.84rem;
+}
+
+.saas-filter-bar .input-group-text {
+    height: 38px;
+    border-top-left-radius: 0.5rem;
+    border-bottom-left-radius: 0.5rem;
+}
+
+.saas-table thead th {
+    background-color: #f8fafc;
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.6rem 0.75rem;
+    white-space: nowrap;
+}
+
+.saas-table tbody td {
+    padding: 0.52rem 0.75rem;
+    vertical-align: middle;
+    color: #171717;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.8125rem;
+}
+
+.saas-table tbody tr:hover {
+    background-color: #fffdf5;
+}
+
+.saas-code-pill {
+    display: inline-block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #171717;
+    background: #fff8e5;
+    border: 1px solid rgba(255, 198, 41, 0.55);
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.45rem;
+}
+
+.saas-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.68rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 50rem;
+    text-transform: capitalize;
+}
+.saas-status-badge.active { background: rgba(16, 185, 129, 0.14); color: #047857; }
+.saas-status-badge.pending { background: rgba(245, 158, 11, 0.16); color: #b45309; }
+.saas-status-badge.suspended,
+.saas-status-badge.inactive { background: rgba(239, 68, 68, 0.12); color: #b91c1c; }
+.saas-status-badge.closed { background: #f1f5f9; color: #64748b; }
+
+.saas-action-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #475569;
+    transition: all 0.15s ease;
+}
+.saas-action-btn:hover { background: #f8fafc; color: #171717; border-color: #cbd5e1; }
+.saas-action-btn.view:hover { color: #3b82f6; background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.35); }
+.saas-action-btn.edit:hover { color: #8b5cf6; background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.35); }
+.saas-action-btn.toggle:hover { color: #d97706; background: #fff8e5; border-color: #ffc629; }
+.saas-action-btn.delete:hover { color: #ef4444; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.35); }
+
+/* Sectioned Modal Forms */
+.saas-form-section {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.saas-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.86rem;
+    font-weight: 800;
+    color: #171717;
+    padding-bottom: 0.45rem;
+    margin-bottom: 0.7rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.saas-section-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 0.4rem;
+    background: #fff8e5;
+    color: #b45309;
+    border: 1px solid rgba(255, 198, 41, 0.5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+.saas-modal .form-label {
+    font-size: 0.78rem;
+    margin-bottom: 0.3rem !important;
+}
+
+.saas-modal .form-control:not(textarea),
+.saas-modal .form-select {
+    height: 40px;
+    min-height: 40px;
+    border-radius: 0.5rem;
+    border-color: #dbe2ea;
+    color: #171717;
+    font-size: 0.85rem;
+}
+
+.saas-modal textarea.form-control {
+    min-height: 62px;
+    border-radius: 0.5rem;
+    border-color: #dbe2ea;
+    color: #171717;
+    font-size: 0.85rem;
+}
+
+.saas-modal .modal-footer .btn {
+    min-height: 38px;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+}
+
+.saas-modal .form-control:focus,
+.saas-modal .form-select:focus {
+    border-color: #ffc629;
+    box-shadow: 0 0 0 0.22rem rgba(255, 198, 41, 0.24);
+}
+
+/* International Phone Dial Picker */
+.intl-phone-group .intl-dial-toggle {
+    height: 42px;
+    min-height: 42px;
+    border-color: #dbe2ea;
+    background-color: #f8fafc;
+    color: #171717;
+    border-top-left-radius: 0.5rem !important;
+    border-bottom-left-radius: 0.5rem !important;
+    padding: 0.375rem 0.65rem;
+    font-size: 0.85rem;
+}
+
+.intl-phone-group .intl-dial-toggle:hover,
+.intl-phone-group .intl-dial-toggle:focus {
+    background-color: #fff8e5;
+    border-color: #ffc629;
+    color: #171717;
+    box-shadow: none;
+}
+
+.intl-phone-group .intl-dial-menu {
+    z-index: 1080;
+    width: 300px;
+    max-width: calc(100vw - 40px);
+    max-height: 280px;
+    overflow: hidden;
+}
+
+.intl-phone-group .intl-phone-input {
+    border-top-right-radius: 0.5rem !important;
+    border-bottom-right-radius: 0.5rem !important;
+}
+
+
+/* =========================================================
+   Store & Vendor Management Scoped UI & Horizontal Table Scroll
+   ========================================================= */
+.store-management,
+.vendor-management {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+.store-management .saas-surface-card,
+.vendor-management .saas-surface-card {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.store-management .store-table-scroll,
+.vendor-management .vendor-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.store-management .store-management-table,
+.vendor-management .vendor-management-table {
+    min-width: 1180px;
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+.store-management .store-management-table th,
+.store-management .store-management-table td,
+.vendor-management .vendor-management-table th,
+.vendor-management .vendor-management-table td {
+    vertical-align: middle;
+}
+
+.store-management .store-management-table th:nth-child(1),
+.store-management .store-management-table td:nth-child(1),
+.store-management .store-management-table th:nth-child(5),
+.store-management .store-management-table td:nth-child(5),
+.store-management .store-management-table th:nth-child(8),
+.store-management .store-management-table td:nth-child(8),
+.store-management .store-management-table th:nth-child(9),
+.store-management .store-management-table td:nth-child(9),
+.store-management .store-management-table th:nth-child(10),
+.store-management .store-management-table td:nth-child(10),
+.vendor-management .vendor-management-table th:nth-child(1),
+.vendor-management .vendor-management-table td:nth-child(1),
+.vendor-management .vendor-management-table th:nth-child(7),
+.vendor-management .vendor-management-table td:nth-child(7),
+.vendor-management .vendor-management-table th:nth-child(8),
+.vendor-management .vendor-management-table td:nth-child(8),
+.vendor-management .vendor-management-table th:nth-child(9),
+.vendor-management .vendor-management-table td:nth-child(9),
+.vendor-management .vendor-management-table th:nth-child(10),
+.vendor-management .vendor-management-table td:nth-child(10) {
+    white-space: nowrap;
+}
+
+.store-management .store-management-table .saas-action-btn,
+.vendor-management .vendor-management-table .saas-action-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 0.5rem;
+}
+
+.store-management .store-management-table .saas-action-btn.view,
+.vendor-management .vendor-management-table .saas-action-btn.view {
+    color: #7c3aed;
+    background: rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.22);
+}
+.store-management .store-management-table .saas-action-btn.view:hover,
+.vendor-management .vendor-management-table .saas-action-btn.view:hover {
+    color: #6d28d9;
+    background: rgba(139, 92, 246, 0.16);
+    border-color: rgba(139, 92, 246, 0.45);
+}
+
+.store-management .store-management-table .saas-action-btn.edit,
+.vendor-management .vendor-management-table .saas-action-btn.edit {
+    color: #2563eb;
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.22);
+}
+.store-management .store-management-table .saas-action-btn.edit:hover,
+.vendor-management .vendor-management-table .saas-action-btn.edit:hover {
+    color: #1d4ed8;
+    background: rgba(59, 130, 246, 0.16);
+    border-color: rgba(59, 130, 246, 0.45);
+}
+
+.store-management .store-management-table .saas-action-btn.toggle,
+.vendor-management .vendor-management-table .saas-action-btn.toggle {
+    color: #d97706;
+    background: #fff8e5;
+    border-color: rgba(255, 198, 41, 0.55);
+}
+.store-management .store-management-table .saas-action-btn.toggle:hover,
+.vendor-management .vendor-management-table .saas-action-btn.toggle:hover {
+    color: #b45309;
+    background: #fef0c7;
+    border-color: #f59e0b;
+}
+
+.store-management .store-management-table .saas-action-btn.delete,
+.vendor-management .vendor-management-table .saas-action-btn.delete {
+    color: #dc2626;
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.22);
+}
+.store-management .store-management-table .saas-action-btn.delete:hover,
+.vendor-management .vendor-management-table .saas-action-btn.delete:hover {
+    color: #b91c1c;
+    background: rgba(239, 68, 68, 0.16);
+    border-color: rgba(239, 68, 68, 0.45);
+}
+
+/* Scoped Filter Bar (consistent 38px height) */
+.store-management__filters .form-control,
+.store-management__filters .form-select,
+.store-management__filters .btn,
+.store-management__filters .input-group-text,
+.vendor-management__filters .form-control,
+.vendor-management__filters .form-select,
+.vendor-management__filters .btn,
+.vendor-management__filters .input-group-text {
+    height: 38px;
+    min-height: 38px;
+    font-size: 0.84rem;
+}
+
+.store-management__filters .btn,
+.vendor-management__filters .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+/* Scoped Modal Inputs & Select2 (consistent 40px height) */
+.store-management__modal .form-control:not(textarea),
+.store-management__modal .form-select,
+.store-management__modal .intl-phone-group .intl-dial-toggle,
+.vendor-management__modal .form-control:not(textarea),
+.vendor-management__modal .form-select,
+.vendor-management__modal .intl-phone-group .intl-dial-toggle {
+    height: 40px;
+    min-height: 40px;
+}
+
+.store-management__modal .select2-container--default .select2-selection--single,
+.vendor-management__modal .select2-container--default .select2-selection--single {
+    height: 40px;
+    min-height: 40px;
+}
+
+.store-management__modal .select2-container--default .select2-selection--single .select2-selection__arrow,
+.vendor-management__modal .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 38px;
+}
+
+.store-management__modal .select2-container--default .select2-selection--multiple,
+.vendor-management__modal .select2-container--default .select2-selection--multiple {
+    min-height: 40px;
+}
+
+/* DataTables pagination & length alignment */
+.store-management .dataTables_wrapper .dataTables_length select,
+.vendor-management .dataTables_wrapper .dataTables_length select {
+    height: 36px;
+    border-radius: 0.45rem;
+    border-color: #dbe2ea;
+}
+
+.store-management .dataTables_wrapper .pagination,
+.vendor-management .dataTables_wrapper .pagination {
+    margin-bottom: 0;
+    gap: 0.2rem;
+}
+
+.store-management .dataTables_wrapper .page-link,
+.vendor-management .dataTables_wrapper .page-link {
+    border-radius: 0.45rem;
+    color: #171717;
+    border-color: #e2e8f0;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.85rem;
+}
+
+.store-management .dataTables_wrapper .page-item.active .page-link,
+.vendor-management .dataTables_wrapper .page-item.active .page-link {
+    background-color: #ffc629;
+    border-color: #f5b800;
+    color: #171717;
+    font-weight: 700;
+}

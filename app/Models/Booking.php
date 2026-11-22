@@ -297,6 +297,95 @@ class Booking extends Model
         return $this->hasMany(BookingOperationalItem::class)->orderBy('id');
     }
 
+    public function deliveryAssignments(): HasMany
+    {
+        return $this->hasMany(\Modules\Admin\Models\DeliveryAssignment::class)->orderByDesc('id');
+    }
+
+    public function assignedStore(): BelongsTo
+    {
+        return $this->belongsTo(\Modules\Admin\Models\Store::class, 'assigned_store_id');
+    }
+
+    public function storeAssignments(): HasMany
+    {
+        return $this->hasMany(\Modules\Admin\App\Models\BookingStoreAssignment::class)->orderByDesc('id');
+    }
+
+    public function currentStoreAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\Modules\Admin\App\Models\BookingStoreAssignment::class)->where('is_current', true)->latest('id');
+    }
+
+    public function hasValidActiveStoreAssignment(): bool
+    {
+        return $this->currentStoreAssignment()
+            ->whereHas('store', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'))
+            ->exists();
+    }
+
+    public function currentCollectionAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\Modules\Admin\Models\DeliveryAssignment::class)
+            ->where('assignment_type', \Modules\Admin\Models\DeliveryAssignment::TYPE_CUSTOMER_COLLECTION)
+            ->whereNotIn('status', [
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_CANCELLED,
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_FAILED,
+            ])
+            ->latest('id');
+    }
+
+    public function currentFinalDeliveryAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\Modules\Admin\Models\DeliveryAssignment::class)
+            ->where('assignment_type', \Modules\Admin\Models\DeliveryAssignment::TYPE_FINAL_DELIVERY)
+            ->whereNotIn('status', [
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_CANCELLED,
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_FAILED,
+            ])
+            ->latest('id');
+    }
+
+    public function hasValidCollectionCourierAssignment(): bool
+    {
+        return $this->currentCollectionAssignment()
+            ->whereHas('deliveryPerson', fn ($q) => $q->where('work_status', 'active')->whereNull('deleted_at'))
+            ->exists();
+    }
+
+    public function hasValidFinalDeliveryCourierAssignment(): bool
+    {
+        return $this->currentFinalDeliveryAssignment()
+            ->whereHas('deliveryPerson', fn ($q) => $q->where('work_status', 'active')->whereNull('deleted_at'))
+            ->exists();
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(BookingInvoice::class)->orderByDesc('revision_number');
+    }
+
+    public function currentInvoice(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BookingInvoice::class)->where('is_current', true)->latest('revision_number');
+    }
+
+    public function isInvoiceEligible(CurrencyService $currencyService): bool
+    {
+        if ($this->booking_status === self::STATUS_CANCELLED) {
+            return false;
+        }
+
+        $completedStages = $this->getCompletedOperationalStatuses();
+        if (! in_array(self::STATUS_FINALIZED, $completedStages, true)) {
+            return false;
+        }
+
+        $pricingSummary = $this->getOperationalPricingSummary($currencyService);
+
+        return (bool) ($pricingSummary['is_pricing_complete'] ?? false);
+    }
+
     public function isConfirmedAndLocked(): bool
     {
         return $this->confirmed_at !== null && (bool) $this->is_locked;

@@ -20,18 +20,28 @@ class Store extends Model
         'name',
         'bn_name',
         'slug',
+        'store_code',
         'logo',
         'cover_image',
         'description',
         'contact_person',
+        'phone_country_code',
         'phone',
+        'alt_phone_country_code',
         'alt_phone',
         'email',
+        'website',
         'store_type',
         'holding_no',
         'road_no',
         'nearby_landmark',
         'full_address',
+        'country_code',
+        'country_name',
+        'address_line_1',
+        'address_line_2',
+        'city',
+        'state_region',
         'opening_hours',
         'division_id',
         'district_id',
@@ -48,6 +58,7 @@ class Store extends Model
         'delivery_fee',
         'free_delivery_threshold',
         'turnaround_time',
+        'capacity',
         'is_accepting_orders',
         'service_area_ids',
         'service_areas_text',
@@ -92,6 +103,9 @@ class Store extends Model
     protected static function booted(): void
     {
         static::deleting(function (Store $store) {
+            if (! $store->isForceDeleting()) {
+                return;
+            }
             if ($store->logo && Storage::disk('public')->exists($store->logo)) {
                 Storage::disk('public')->delete($store->logo);
             }

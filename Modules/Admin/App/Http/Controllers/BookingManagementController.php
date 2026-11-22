@@ -7,6 +7,7 @@ use App\Mail\BookingNotificationMail;
 use App\Models\Booking;
 use App\Models\BookingAuditLog;
 use App\Models\BookingOperationalItem;
+use App\Services\BookingInvoiceService;
 use App\Services\CurrencyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,9 +18,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Modules\Admin\App\Models\BookingFeeSetting;
+use Modules\Admin\App\Models\BookingStoreAssignment;
+use Modules\Admin\App\Services\DeliveryLogisticsService;
+use Modules\Admin\Models\DeliveryAssignment;
+use Modules\Admin\Models\DeliveryAssignmentEvent;
+use Modules\Admin\Models\DeliveryPerson;
 use Modules\Admin\Models\Item;
 use Modules\Admin\Models\ItemCategory;
 use Modules\Admin\Models\Service;
+use Modules\Admin\Models\Store;
+use Modules\Admin\Models\UkAddress;
 
 class BookingManagementController extends Controller
 {
@@ -85,7 +93,20 @@ class BookingManagementController extends Controller
     public function show(Booking $booking)
     {
         $booking->syncOperationalItemsFromSnapshotIfEmpty($this->currencyService);
-        $booking->load(['operationalItems.service', 'operationalItems.category', 'operationalItems.item', 'auditLogs', 'user']);
+        $booking->load([
+            'operationalItems.service',
+            'operationalItems.category',
+            'operationalItems.item',
+            'auditLogs',
+            'user',
+            'assignedStore',
+            'currentStoreAssignment.assignedByAdmin',
+            'storeAssignments.assignedByAdmin',
+            'currentCollectionAssignment.deliveryPerson.postcodes',
+            'currentFinalDeliveryAssignment.deliveryPerson.postcodes',
+            'deliveryAssignments.deliveryPerson',
+            'deliveryAssignments.store',
+        ]);
 
         $currencyService = $this->currencyService;
         $statusLabels = Booking::STATUS_LABELS;
@@ -96,7 +117,33 @@ class BookingManagementController extends Controller
         $completedOperationalStatuses = $booking->getCompletedOperationalStatuses();
         $stageProgress = $booking->getOperationalStageProgress();
 
-        return view('admin::bookings.show', compact('booking', 'currencyService', 'statusLabels', 'allowedNextStatuses', 'pricingSummary', 'categoryGroups', 'operationalStatuses', 'completedOperationalStatuses', 'stageProgress'));
+        $rawPostcode = trim((string) (($booking->address_snapshot['postcode'] ?? '') ?: ''));
+        $customerPostcode = $rawPostcode !== '' ? (UkAddress::normalizePostcode($rawPostcode) ?? strtoupper($rawPostcode)) : null;
+        $hasValidStoreAssignment = $booking->hasValidActiveStoreAssignment();
+        $collectionAssignment = $booking->currentCollectionAssignment;
+        $finalDeliveryAssignment = $booking->currentFinalDeliveryAssignment;
+        $hasValidCollectionCourier = $booking->hasValidCollectionCourierAssignment();
+        $hasValidFinalDeliveryCourier = $booking->hasValidFinalDeliveryCourierAssignment();
+        $isInvoiceEligible = $booking->isInvoiceEligible($this->currencyService);
+
+        return view('admin::bookings.show', compact(
+            'booking',
+            'currencyService',
+            'statusLabels',
+            'allowedNextStatuses',
+            'pricingSummary',
+            'categoryGroups',
+            'operationalStatuses',
+            'completedOperationalStatuses',
+            'stageProgress',
+            'customerPostcode',
+            'hasValidStoreAssignment',
+            'collectionAssignment',
+            'finalDeliveryAssignment',
+            'hasValidCollectionCourier',
+            'hasValidFinalDeliveryCourier',
+            'isInvoiceEligible'
+        ));
     }
 
     public function edit(Booking $booking)
@@ -1043,6 +1090,24 @@ class BookingManagementController extends Controller
         $oldStatus = $booking->booking_status;
         $changedAt = now()->toIso8601String();
 
+        if ($oldStatus === Booking::STATUS_STORE_ASSIGNED && ! $booking->hasValidActiveStoreAssignment()) {
+            return back()->withErrors([
+                'booking_status' => 'Assign a store to this booking before completing Store Assigned.',
+            ]);
+        }
+
+        if ($oldStatus === Booking::STATUS_DELIVERY_MAN_ASSIGNED && ! $booking->hasValidCollectionCourierAssignment()) {
+            return back()->withErrors([
+                'booking_status' => 'Assign a collection delivery person to this booking before completing Delivery Man Assigned.',
+            ]);
+        }
+
+        if ($oldStatus === Booking::STATUS_DELIVERY_MAN_ASSIGNED_FOR_STORE_PICKUP && ! $booking->hasValidFinalDeliveryCourierAssignment()) {
+            return back()->withErrors([
+                'booking_status' => 'Assign a final delivery person to this booking before completing Delivery Man Assigned for Store Pickup.',
+            ]);
+        }
+
         DB::transaction(function () use ($request, $booking, $oldStatus, $targetStatus, $validated, $changedAt) {
             if (array_key_exists($oldStatus, Booking::OPERATIONAL_STATUSES)) {
                 $stages = is_array($booking->completed_operational_stages) ? $booking->completed_operational_stages : [];
@@ -1116,6 +1181,21 @@ class BookingManagementController extends Controller
             }
 
             $currentStage = $locked->booking_status;
+            if ($currentStage === Booking::STATUS_STORE_ASSIGNED && ! $locked->hasValidActiveStoreAssignment()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'booking_status' => 'Assign a store to this booking before completing Store Assigned.',
+                ]);
+            }
+            if ($currentStage === Booking::STATUS_DELIVERY_MAN_ASSIGNED && ! $locked->hasValidCollectionCourierAssignment()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'booking_status' => 'Assign a collection delivery person to this booking before completing Delivery Man Assigned.',
+                ]);
+            }
+            if ($currentStage === Booking::STATUS_DELIVERY_MAN_ASSIGNED_FOR_STORE_PICKUP && ! $locked->hasValidFinalDeliveryCourierAssignment()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'booking_status' => 'Assign a final delivery person to this booking before completing Delivery Man Assigned for Store Pickup.',
+                ]);
+            }
             $nextStage = $locked->getNextOperationalStatus();
             $nowIso = now()->toIso8601String();
             $stages = is_array($locked->completed_operational_stages) ? $locked->completed_operational_stages : [];
@@ -1154,6 +1234,601 @@ class BookingManagementController extends Controller
             : "Marked {$completedLabel} Done. Current stage is now {$nextLabel}.";
 
         return back()->with('success', $msg);
+    }
+
+    /**
+     * AJAX Select2 search for eligible active stores, prioritizing exact customer postcode matches.
+     */
+    public function searchStores(Request $request, Booking $booking): JsonResponse
+    {
+        $search = trim((string) $request->input('q', ''));
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 20;
+
+        $rawCustomerPostcode = trim((string) (($booking->address_snapshot['postcode'] ?? '') ?: ''));
+        $customerCompact = $rawCustomerPostcode !== '' ? UkAddress::compactPostcode($rawCustomerPostcode) : '';
+
+        $query = Store::query()->where('status', 'active');
+
+        if ($search !== '') {
+            $compactSearch = UkAddress::compactPostcode($search);
+            $query->where(function ($q) use ($search, $compactSearch) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('store_code', 'like', "%{$search}%")
+                    ->orWhere('city', 'like', "%{$search}%")
+                    ->orWhere('postcode', 'like', "%{$search}%");
+                if ($compactSearch !== '') {
+                    $q->orWhereRaw("REPLACE(UPPER(COALESCE(postcode, '')), ' ', '') LIKE ?", ["%{$compactSearch}%"]);
+                }
+            });
+        }
+
+        $stores = $query->orderBy('name')->get();
+
+        $mapped = $stores->map(function (Store $store) use ($customerCompact) {
+            $storePostcode = filled($store->postcode)
+                ? (UkAddress::normalizePostcode((string) $store->postcode) ?? strtoupper(trim((string) $store->postcode)))
+                : null;
+            $storeCompact = filled($store->postcode) ? UkAddress::compactPostcode((string) $store->postcode) : '';
+            $isMatch = $customerCompact !== '' && $storeCompact !== '' && $customerCompact === $storeCompact;
+            $address = $store->address_line_1
+                ? implode(', ', array_filter([$store->address_line_1, $store->address_line_2, $store->city, $store->state_region, $storePostcode]))
+                : ($store->full_address ?: 'Not provided');
+            $storePhone = trim(($store->phone_country_code ? $store->phone_country_code . ' ' : '') . ($store->phone ?? ''));
+
+            return [
+                'id' => $store->id,
+                'text' => $store->name . ($storePostcode ? " ({$storePostcode})" : '') . ($store->city ? " — {$store->city}" : ''),
+                'store_name' => $store->name,
+                'store_code' => $store->store_code ?? '',
+                'store_address' => $address,
+                'store_city' => $store->city ?: '',
+                'store_county' => $store->state_region ?: '',
+                'store_postcode' => $storePostcode ?? 'Not provided',
+                'store_phone' => $storePhone !== '' ? $storePhone : 'Contact number not provided',
+                'postcode_match' => $isMatch,
+            ];
+        })->sortByDesc('postcode_match')->values();
+
+        $total = $mapped->count();
+        $offset = ($page - 1) * $perPage;
+        $results = $mapped->slice($offset, $perPage)->values();
+
+        return response()->json([
+            'results' => $results,
+            'pagination' => [
+                'more' => ($offset + $perPage) < $total,
+            ],
+        ]);
+    }
+
+    /**
+     * Assign or reassign an active store to a booking, preserving history & snapshot.
+     */
+    public function assignStore(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        if (in_array($booking->booking_status, [Booking::STATUS_CANCELLED, Booking::STATUS_COMPLETED], true)) {
+            $msg = 'Cancelled or completed bookings cannot be reassigned to another store.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['store_id' => $msg]);
+        }
+
+        $validated = $request->validate([
+            'store_id' => ['required', 'integer', 'exists:stores,id'],
+            'override_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $store = Store::where('id', $validated['store_id'])->first();
+        if (! $store || $store->status !== 'active' || $store->trashed()) {
+            $msg = 'Selected store is not active or no longer available for assignment.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['store_id' => $msg]);
+        }
+
+        $rawCustomerPostcode = trim((string) (($booking->address_snapshot['postcode'] ?? '') ?: ''));
+        $customerPostcode = $rawCustomerPostcode !== ''
+            ? (UkAddress::normalizePostcode($rawCustomerPostcode) ?? strtoupper($rawCustomerPostcode))
+            : null;
+        $customerCompact = $rawCustomerPostcode !== '' ? UkAddress::compactPostcode($rawCustomerPostcode) : '';
+
+        $storePostcode = filled($store->postcode)
+            ? (UkAddress::normalizePostcode((string) $store->postcode) ?? strtoupper(trim((string) $store->postcode)))
+            : null;
+        $storeCompact = filled($store->postcode) ? UkAddress::compactPostcode((string) $store->postcode) : '';
+
+        $postcodeMatched = $customerCompact !== '' && $storeCompact !== '' && $customerCompact === $storeCompact;
+
+        $currentAssignment = $booking->currentStoreAssignment;
+        if ($currentAssignment && (int) $currentAssignment->store_id === (int) $store->id) {
+            $msg = "Store \"{$store->name}\" is already assigned to this booking.";
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'booking_id' => $booking->id,
+                    'store_id' => $store->id,
+                    'store_name' => $currentAssignment->store_name_snapshot,
+                    'store_address' => $currentAssignment->store_address_snapshot,
+                    'store_city' => $currentAssignment->store_city_snapshot,
+                    'store_postcode' => $currentAssignment->store_postcode_snapshot,
+                    'store_phone' => $currentAssignment->store_phone_snapshot ?: 'Contact number not provided',
+                    'postcode_match' => (bool) $currentAssignment->postcode_matched,
+                    'assigned_at' => $currentAssignment->assigned_at?->format('d M Y, H:i'),
+                    'can_complete_store_stage' => true,
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        }
+
+        $isReassignment = $currentAssignment !== null && (int) $currentAssignment->store_id !== (int) $store->id;
+
+        if ($isReassignment) {
+            $hasActiveDelivery = DeliveryAssignment::where('booking_id', $booking->id)
+                ->whereIn('status', [
+                    DeliveryAssignment::STATUS_PICKED_UP,
+                    DeliveryAssignment::STATUS_IN_TRANSIT,
+                    DeliveryAssignment::STATUS_HANDED_OVER,
+                    DeliveryAssignment::STATUS_COMPLETED,
+                ])
+                ->exists();
+
+            if ($hasActiveDelivery) {
+                $msg = 'Cannot reassign store while a delivery or collection assignment is already in progress.';
+                return $request->expectsJson()
+                    ? response()->json(['success' => false, 'message' => $msg], 422)
+                    : back()->withErrors(['store_id' => $msg]);
+            }
+        }
+
+        $reason = trim((string) ($validated['override_reason'] ?? ''));
+        if ((! $postcodeMatched || $isReassignment) && $reason === '') {
+            $msg = $isReassignment
+                ? 'Please provide a reason for reassigning the store.'
+                : 'A manual override reason is required when assigning a store with a different postcode.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg, 'errors' => ['override_reason' => [$msg]]], 422)
+                : back()->withErrors(['override_reason' => $msg])->withInput();
+        }
+
+        $assignment = DB::transaction(function () use (
+            $request,
+            $booking,
+            $store,
+            $currentAssignment,
+            $isReassignment,
+            $customerPostcode,
+            $storePostcode,
+            $postcodeMatched,
+            $reason
+        ) {
+            /** @var Booking $locked */
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+
+            $previousStoreId = $currentAssignment?->store_id;
+            $previousStoreName = $currentAssignment?->store_name_snapshot;
+
+            if ($currentAssignment) {
+                $currentAssignment->update([
+                    'is_current' => false,
+                    'status' => 'reassigned',
+                    'superseded_by_admin_id' => $this->adminId(),
+                    'superseded_at' => now(),
+                ]);
+            }
+
+            $storeAddress = $store->address_line_1
+                ? implode(', ', array_filter([$store->address_line_1, $store->address_line_2, $store->city, $store->state_region, $storePostcode]))
+                : ($store->full_address ?: 'Not provided');
+
+            $assignment = BookingStoreAssignment::create([
+                'booking_id' => $locked->id,
+                'store_id' => $store->id,
+                'is_current' => true,
+                'status' => 'assigned',
+                'customer_postcode' => $customerPostcode,
+                'store_postcode' => $storePostcode,
+                'postcode_matched' => $postcodeMatched,
+                'override_reason' => ! $postcodeMatched ? $reason : null,
+                'reassignment_reason' => $isReassignment ? $reason : null,
+                'store_name_snapshot' => $store->name,
+                'store_code_snapshot' => $store->store_code,
+                'store_address_snapshot' => $storeAddress,
+                'store_city_snapshot' => $store->city ?: ($store->district?->name ?? null),
+                'store_postcode_snapshot' => $storePostcode,
+                'store_phone_snapshot' => trim(($store->phone_country_code ? $store->phone_country_code . ' ' : '') . $store->phone),
+                'assigned_by_admin_id' => $this->adminId(),
+                'assigned_at' => now(),
+            ]);
+
+            $locked->assigned_store_id = $store->id;
+            $locked->save();
+
+            $this->logAudit(
+                $request,
+                $locked,
+                $isReassignment ? 'store_reassigned' : 'store_assigned',
+                ($isReassignment ? "Reassigned store from {$previousStoreName} to {$store->name}" : "Assigned store {$store->name}") . ($storePostcode ? " ({$storePostcode})" : ''),
+                [
+                    'previous_store_id' => $previousStoreId,
+                    'previous_store_name' => $previousStoreName,
+                    'new_store_id' => $store->id,
+                    'new_store_name' => $store->name,
+                    'customer_postcode' => $customerPostcode,
+                    'store_postcode' => $storePostcode,
+                    'postcode_matched' => $postcodeMatched,
+                    'reason' => $reason ?: null,
+                    'assigned_by' => $this->adminId(),
+                ]
+            );
+
+            return $assignment;
+        });
+
+        $message = $isReassignment
+            ? "Store reassigned to \"{$store->name}\"."
+            : "Store \"{$store->name}\" assigned successfully. You can now mark Store Assigned done.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'booking_id' => $booking->id,
+                'store_id' => $store->id,
+                'store_name' => $assignment->store_name_snapshot,
+                'store_address' => $assignment->store_address_snapshot,
+                'store_city' => $assignment->store_city_snapshot,
+                'store_postcode' => $assignment->store_postcode_snapshot,
+                'store_phone' => $assignment->store_phone_snapshot ?: 'Contact number not provided',
+                'postcode_match' => (bool) $assignment->postcode_matched,
+                'assigned_at' => $assignment->assigned_at?->format('d M Y, H:i'),
+                'can_complete_store_stage' => true,
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function searchCouriers(Request $request, Booking $booking): JsonResponse
+    {
+        $queryText = mb_strtolower(trim((string) $request->query('q', '')));
+        $assignmentType = (string) $request->query('assignment_type', DeliveryAssignment::TYPE_CUSTOMER_COLLECTION);
+        if (! in_array($assignmentType, [DeliveryAssignment::TYPE_CUSTOMER_COLLECTION, DeliveryAssignment::TYPE_FINAL_DELIVERY], true)) {
+            $assignmentType = DeliveryAssignment::TYPE_CUSTOMER_COLLECTION;
+        }
+        /** @var DeliveryLogisticsService $logistics */
+        $logistics = app(DeliveryLogisticsService::class);
+        $eligible = $logistics->findEligibleDeliveryPersonsForBooking($booking, $assignmentType, $booking->assignedStore);
+
+        $personIds = array_column($eligible, 'id');
+        $personsMap = DeliveryPerson::query()
+            ->whereIn('id', $personIds)
+            ->with('postcodes')
+            ->get()
+            ->keyBy('id');
+
+        $rawCustomerPostcode = trim((string) (($booking->address_snapshot['postcode'] ?? '') ?: ''));
+        $customerPostcode = $rawCustomerPostcode !== ''
+            ? (UkAddress::normalizePostcode($rawCustomerPostcode) ?? strtoupper($rawCustomerPostcode))
+            : null;
+
+        $results = [];
+        $hasPostcodeMatch = false;
+
+        foreach ($eligible as $row) {
+            /** @var DeliveryPerson|null $person */
+            $person = $personsMap->get($row['id']);
+            $phone = $person ? $person->phone_display : '';
+            $postcodesList = $person ? $person->postcodes->pluck('postcode')->all() : [];
+
+            if ($queryText !== '') {
+                $haystack = mb_strtolower(implode(' ', array_filter([
+                    $row['full_name'],
+                    $row['code'],
+                    $phone,
+                    $row['store_name'],
+                    implode(' ', $postcodesList),
+                ])));
+                if (! str_contains($haystack, $queryText)) {
+                    continue;
+                }
+            }
+
+            if ($row['postcode_matched']) {
+                $hasPostcodeMatch = true;
+            }
+
+            $badge = $row['postcode_matched']
+                ? ('Covers ' . ($row['matched_postcode'] ?? $customerPostcode))
+                : 'Manual Assignment';
+
+            $results[] = [
+                'id' => $row['id'],
+                'text' => "{$row['full_name']} ({$row['code']}) — {$badge}",
+                'full_name' => $row['full_name'],
+                'code' => $row['code'],
+                'phone' => $phone !== '' ? $phone : 'Not provided',
+                'store_name' => $row['store_name'],
+                'availability_status' => $row['availability_status'],
+                'postcode_match' => (bool) $row['postcode_matched'],
+                'matched_postcode' => $row['matched_postcode'],
+                'covered_postcodes' => $postcodesList,
+                'active_assignments_count' => (int) $row['active_assignments_count'],
+            ];
+        }
+
+        return response()->json([
+            'results' => $results,
+            'has_postcode_match' => $hasPostcodeMatch,
+            'customer_postcode' => $customerPostcode,
+        ]);
+    }
+
+    public function assignCourier(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        if (in_array($booking->booking_status, [Booking::STATUS_CANCELLED, Booking::STATUS_COMPLETED], true)) {
+            $msg = 'Cancelled or completed bookings cannot be assigned a delivery person.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['delivery_person_id' => $msg]);
+        }
+
+        $validated = $request->validate([
+            'delivery_person_id' => ['required', 'integer', 'exists:delivery_persons,id'],
+            'assignment_type' => ['required', 'string', Rule::in([
+                DeliveryAssignment::TYPE_CUSTOMER_COLLECTION,
+                DeliveryAssignment::TYPE_FINAL_DELIVERY,
+            ])],
+            'override_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        if (! $booking->hasValidActiveStoreAssignment()) {
+            $msg = 'Assign an active store to this booking before assigning a delivery person.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['delivery_person_id' => $msg]);
+        }
+
+        $person = DeliveryPerson::with('postcodes')->find($validated['delivery_person_id']);
+        if (! $person || $person->trashed() || ! $person->isEligibleForAssignment()) {
+            $msg = 'Selected delivery person is inactive, suspended, or unavailable for assignment.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['delivery_person_id' => $msg]);
+        }
+
+        $assignmentType = $validated['assignment_type'];
+        $existingAssignment = DeliveryAssignment::query()
+            ->where('booking_id', $booking->id)
+            ->where('assignment_type', $assignmentType)
+            ->whereNotIn('status', [
+                DeliveryAssignment::STATUS_CANCELLED,
+                DeliveryAssignment::STATUS_FAILED,
+            ])
+            ->latest('id')
+            ->first();
+
+        $rawCustomerPostcode = trim((string) (($booking->address_snapshot['postcode'] ?? '') ?: ''));
+        $customerCompact = $rawCustomerPostcode !== '' ? UkAddress::compactPostcode($rawCustomerPostcode) : '';
+        $matchedPostcode = $customerCompact !== ''
+            ? $person->postcodes->firstWhere('postcode_compact', $customerCompact)?->postcode
+            : null;
+        $postcodeMatched = $matchedPostcode !== null;
+
+        $courierPhone = $person->phone_display !== '' ? $person->phone_display : 'Not provided';
+        $courierAddress = $person->full_residential_address
+            ?: (implode(', ', array_filter([$person->address_line_1, $person->city, $person->residential_postcode])) ?: 'Address not provided');
+
+        if ($existingAssignment && (int) $existingAssignment->delivery_person_id === (int) $person->id) {
+            $msg = "Delivery person \"{$person->full_name}\" is already assigned for this leg.";
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'booking_id' => $booking->id,
+                    'assignment_id' => $existingAssignment->id,
+                    'assignment_type' => $assignmentType,
+                    'delivery_person_id' => $person->id,
+                    'courier_name' => $person->full_name,
+                    'courier_code' => $person->code,
+                    'courier_phone' => $courierPhone,
+                    'courier_address' => $courierAddress,
+                    'postcode_match' => $postcodeMatched,
+                    'matched_postcode' => $matchedPostcode,
+                    'status' => $existingAssignment->status,
+                    'status_label' => DeliveryAssignment::STATUS_LABELS[$existingAssignment->status] ?? ucfirst((string) $existingAssignment->status),
+                    'assigned_at' => $existingAssignment->assigned_at?->format('d M Y, H:i'),
+                    'can_complete_stage' => true,
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        }
+
+        $isReassignment = $existingAssignment !== null;
+        if ($isReassignment && in_array($existingAssignment->status, [
+            DeliveryAssignment::STATUS_PICKED_UP,
+            DeliveryAssignment::STATUS_IN_TRANSIT,
+            DeliveryAssignment::STATUS_HANDED_OVER,
+            DeliveryAssignment::STATUS_COMPLETED,
+        ], true)) {
+            $msg = 'Cannot reassign delivery person after pickup or handover has already started.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['delivery_person_id' => $msg]);
+        }
+
+        $reason = trim((string) ($validated['override_reason'] ?? ''));
+        if ((! $postcodeMatched || $isReassignment) && $reason === '') {
+            $msg = $isReassignment
+                ? 'Please provide a reason for reassigning the delivery person.'
+                : 'A manual override reason is required when assigning a delivery person who does not cover the customer postcode.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg, 'errors' => ['override_reason' => [$msg]]], 422)
+                : back()->withErrors(['override_reason' => $msg])->withInput();
+        }
+
+        /** @var DeliveryLogisticsService $logistics */
+        $logistics = app(DeliveryLogisticsService::class);
+
+        $assignment = DB::transaction(function () use (
+            $request,
+            $booking,
+            $person,
+            $assignmentType,
+            $existingAssignment,
+            $isReassignment,
+            $reason,
+            $postcodeMatched,
+            $matchedPostcode,
+            $logistics
+        ) {
+            if ($isReassignment && $existingAssignment) {
+                $oldStatus = $existingAssignment->status;
+                $existingAssignment->update([
+                    'status' => DeliveryAssignment::STATUS_CANCELLED,
+                    'cancelled_at' => now(),
+                    'cancellation_reason' => "Superseded by reassignment: {$reason}",
+                    'earnings_status' => 'not_payable',
+                ]);
+
+                DeliveryAssignmentEvent::create([
+                    'delivery_assignment_id' => $existingAssignment->id,
+                    'delivery_person_id' => $existingAssignment->delivery_person_id,
+                    'booking_id' => $booking->id,
+                    'event_type' => 'reassigned_superseded',
+                    'from_status' => $oldStatus,
+                    'to_status' => DeliveryAssignment::STATUS_CANCELLED,
+                    'title' => 'Assignment superseded by courier reassignment',
+                    'description' => "Superseded by reassignment to {$person->full_name} ({$person->code}): {$reason}",
+                    'actor_admin_id' => $this->adminId(),
+                    'occurred_at' => now(),
+                ]);
+            }
+
+            $newAssignment = $logistics->assignToBooking(
+                $booking,
+                $person,
+                $assignmentType,
+                $booking->assignedStore,
+                (int) $this->adminId(),
+                null,
+                $isReassignment ? $reason : null,
+                $postcodeMatched ? null : $reason
+            );
+
+            $legLabel = $assignmentType === DeliveryAssignment::TYPE_FINAL_DELIVERY ? 'Final Delivery' : 'Customer Collection';
+            $this->logAudit(
+                $request,
+                $booking,
+                $isReassignment ? 'courier_reassigned' : 'courier_assigned',
+                ($isReassignment ? "Reassigned {$legLabel}" : "Assigned {$legLabel}") . " to {$person->full_name} ({$person->code})",
+                [
+                    'assignment_type' => $assignmentType,
+                    'delivery_assignment_id' => $newAssignment->id,
+                    'previous_delivery_person_id' => $existingAssignment?->delivery_person_id,
+                    'new_delivery_person_id' => $person->id,
+                    'postcode_matched' => $postcodeMatched,
+                    'matched_postcode' => $matchedPostcode,
+                    'reason' => $reason !== '' ? $reason : null,
+                    'assigned_by' => $this->adminId(),
+                ]
+            );
+
+            return $newAssignment;
+        });
+
+        $legLabel = $assignmentType === DeliveryAssignment::TYPE_FINAL_DELIVERY ? 'Final Delivery' : 'Customer Collection';
+        $message = $isReassignment
+            ? "{$legLabel} delivery person reassigned to \"{$person->full_name}\"."
+            : "{$legLabel} delivery person \"{$person->full_name}\" assigned successfully.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'booking_id' => $booking->id,
+                'assignment_id' => $assignment->id,
+                'assignment_type' => $assignmentType,
+                'delivery_person_id' => $person->id,
+                'courier_name' => $person->full_name,
+                'courier_code' => $person->code,
+                'courier_phone' => $courierPhone,
+                'courier_address' => $courierAddress,
+                'postcode_match' => $postcodeMatched,
+                'matched_postcode' => $matchedPostcode,
+                'status' => $assignment->status,
+                'status_label' => DeliveryAssignment::STATUS_LABELS[$assignment->status] ?? ucfirst((string) $assignment->status),
+                'assigned_at' => $assignment->assigned_at?->format('d M Y, H:i'),
+                'can_complete_stage' => true,
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function invoicePreview(Request $request, Booking $booking): JsonResponse
+    {
+        if (! $booking->isInvoiceEligible($this->currencyService)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invoice is only available after the Finalized booking workflow stage is completed and operational pricing is complete.',
+            ], 403);
+        }
+
+        $format = in_array($request->query('format'), ['thermal', 'a4'], true)
+            ? (string) $request->query('format')
+            : 'thermal';
+        $paperSize = in_array($request->query('paper_size'), ['58mm', '80mm'], true)
+            ? (string) $request->query('paper_size')
+            : '80mm';
+
+        /** @var BookingInvoiceService $invoiceService */
+        $invoiceService = app(BookingInvoiceService::class);
+        $invoice = $invoiceService->issueOrGetCurrentInvoice($booking, $this->adminId());
+        $currencyService = $this->currencyService;
+
+        $viewName = $format === 'a4'
+            ? 'admin::bookings.invoices._a4'
+            : 'admin::bookings.invoices._thermal';
+
+        $html = view($viewName, compact('booking', 'invoice', 'currencyService', 'format', 'paperSize'))->render();
+
+        return response()->json([
+            'success' => true,
+            'invoice_number' => $invoice->invoice_number,
+            'revision_number' => $invoice->revision_number,
+            'issued_at' => $invoice->issued_at?->format('d M Y, H:i'),
+            'format' => $format,
+            'paper_size' => $paperSize,
+            'html' => $html,
+        ]);
+    }
+
+    public function invoicePrint(Request $request, Booking $booking)
+    {
+        abort_unless(
+            $booking->isInvoiceEligible($this->currencyService),
+            403,
+            'Invoice is only available after the Finalized booking workflow stage is completed and operational pricing is complete.'
+        );
+
+        $format = in_array($request->query('format'), ['thermal', 'a4'], true)
+            ? (string) $request->query('format')
+            : 'thermal';
+        $paperSize = in_array($request->query('paper_size'), ['58mm', '80mm'], true)
+            ? (string) $request->query('paper_size')
+            : '80mm';
+
+        /** @var BookingInvoiceService $invoiceService */
+        $invoiceService = app(BookingInvoiceService::class);
+        $invoice = $invoiceService->issueOrGetCurrentInvoice($booking, $this->adminId());
+        $currencyService = $this->currencyService;
+        $autoPrint = $request->boolean('autoprint', false);
+
+        return view('admin::bookings.invoices.print', compact('booking', 'invoice', 'currencyService', 'format', 'paperSize', 'autoPrint'));
     }
 
     protected function notifyCustomerIfApplicable(Booking $booking, string $targetStatus, bool $shouldNotify): void
