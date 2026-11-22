@@ -10,7 +10,7 @@
             <ul class="nav nav-pills align-items-center gap-1 gap-xl-2 m-0 p-0 desktop-nav-menu">
                 <li class="nav-item"><a href="{{ url('/') }}" class="desktop-nav-link {{ request()->is('/') ? 'active' : '' }}">Home</a></li>
                 <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link {{ request()->routeIs('services.*') ? 'active' : '' }}">Services</a></li>
-                <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link">Orders</a></li>
+                <li class="nav-item"><a href="{{ route('orders.index') }}" class="desktop-nav-link {{ request()->routeIs('orders.*') ? 'active' : '' }}">Orders</a></li>
                 <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link">Offers</a></li>
                 <li class="nav-item"><a href="{{ url('/#about') }}" class="desktop-nav-link">About</a></li>
                 <li class="nav-item"><a href="{{ url('/#contact') }}" class="desktop-nav-link">Contact</a></li>
@@ -26,12 +26,73 @@
                     <span class="notify-indicator"></span>
                 </button>
 
-                <div class="d-flex align-items-center gap-2 border rounded-pill px-2 px-xl-3 py-1 bg-white shadow-sm user-pill-desktop">
-                    <img src="{{ asset('admin/assets/images/users/3.jpg') }}" alt="Emma Carter" class="rounded-circle" width="32" height="32">
-                    <span class="fw-bold small text-dark">Emma Carter</span>
-                </div>
+                @auth('web')
+                    @php $customer = auth('web')->user(); @endphp
+                    <div class="dropdown">
+                        <button type="button"
+                                class="btn d-flex align-items-center gap-2 border rounded-pill px-2 px-xl-3 py-1 bg-white shadow-sm user-pill-desktop dropdown-toggle"
+                                id="desktopProfileDropdownBtn"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false">
+                            <span class="rounded-circle d-inline-flex align-items-center justify-content-center fw-bold text-dark"
+                                  style="width: 32px; height: 32px; background: #FFF8E5; border: 1.5px solid #FFC629; font-size: 0.78rem;">
+                                {{ $customer->initials }}
+                            </span>
+                            <span class="fw-bold small text-dark">{{ $customer->name }}</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end border-0 shadow rounded-4 p-2 mt-2 customer-profile-dropdown"
+                            aria-labelledby="desktopProfileDropdownBtn"
+                            style="min-width: 225px;">
+                            <li>
+                                <a class="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2 {{ request()->routeIs('account.profile') ? 'active' : '' }}"
+                                   href="{{ route('account.profile') }}">
+                                    <span>👤</span><span>Profile</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2 {{ request()->routeIs('orders.*') ? 'active' : '' }}"
+                                   href="{{ route('orders.index') }}">
+                                    <span>📦</span><span>My Orders</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2 {{ request()->routeIs('account.addresses*') ? 'active' : '' }}"
+                                   href="{{ route('account.addresses') }}">
+                                    <span>📍</span><span>Address Book</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2 {{ request()->routeIs('account.payment-methods*') ? 'active' : '' }}"
+                                   href="{{ route('account.payment-methods') }}">
+                                    <span>💳</span><span>Saved Payment Methods</span>
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider my-2"></li>
+                            <li>
+                                <form method="POST" action="{{ route('logout') }}">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2 text-danger fw-semibold">
+                                        <span>🚪</span><span>Logout</span>
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                @else
+                    <a href="{{ route('login') }}"
+                       class="d-flex align-items-center gap-2 border rounded-pill px-3 py-1 bg-white shadow-sm user-pill-desktop text-decoration-none">
+                        <span class="rounded-circle d-inline-flex align-items-center justify-content-center"
+                              style="width: 30px; height: 30px; background: #FFF8E5; border: 1.5px solid #FFC629;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#171717" stroke-width="2.2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </span>
+                        <span class="fw-bold small text-dark">Login / Sign Up</span>
+                    </a>
+                @endauth
 
-                <a href="{{ route('booking.services') }}" class="btn btn-warning rounded-pill px-3 px-xl-4 py-2 fw-bold text-dark shadow-sm btn-book-desktop">
+                <a href="{{ route('booking.services', ['new' => 1]) }}" class="btn btn-warning rounded-pill px-3 px-xl-4 py-2 fw-bold text-dark shadow-sm btn-book-desktop">
                     Book Service
                 </a>
             </div>

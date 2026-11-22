@@ -85,7 +85,7 @@
             <!-- ===============================================================
                  STEP 1: SELECT SERVICES FORM (Multi-Service + Database Wash & Fold Options + Special Requests)
                  =============================================================== -->
-            <section id="sectionSelectServices" aria-labelledby="headingSelectServices">
+            <section id="sectionSelectServices" aria-labelledby="headingSelectServices" data-currency="{{ currencyCode() }}">
                 <div class="mb-3">
                     <a href="{{ route('services.index', !empty($booking['category_slug']) ? ['category' => $booking['category_slug']] : []) }}"
                        class="booking-back-btn"
@@ -162,7 +162,7 @@
                                            data-service-subtitle="{{ $sid }}"
                                            data-default-subtitle="{{ $service->subtitle }}">
                                             @if ($service->is_wash_fold && $isSelected && $selectedWashOptObj)
-                                                {{ $selectedWashOptObj->name }} added (BDT {{ number_format((float) $selectedWashOptObj->price, 2) }} / {{ $selectedWashOptObj->unit_name }})
+                                                {{ $selectedWashOptObj->name }} added ({{ formatMoney($selectedWashOptObj->price) }} / {{ $selectedWashOptObj->unit_name }})
                                             @else
                                                 {{ $service->subtitle }}
                                             @endif
@@ -232,7 +232,7 @@
                                                         <div class="wash-radio-content flex-grow-1">
                                                             <div class="d-flex align-items-center justify-content-between gap-2">
                                                                 <span class="wash-radio-name">{{ $washOpt->name }}</span>
-                                                                <span class="wash-radio-price">BDT {{ number_format((float) $washOpt->price, 2) }}<small>/{{ $washOpt->unit_name }}</small></span>
+                                                                <span class="wash-radio-price">{{ formatMoney($washOpt->price) }}<small>/{{ $washOpt->unit_name }}</small></span>
                                                             </div>
                                                             <span class="wash-radio-desc">{{ $washOpt->description }}</span>
                                                         </div>

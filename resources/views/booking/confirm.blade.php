@@ -45,10 +45,17 @@
 
         $currency = $pricing['currency'] ?? 'BDT';
         $estimatedServicesTotal = (float) ($pricing['estimated_services_total'] ?? 0.0);
+        $serviceFeeDisplayName = $pricing['service_fee_display_name'] ?? 'Service Fee';
+        $serviceFeeType = $pricing['service_fee_type'] ?? 'fixed';
+        $serviceFeeValue = (float) ($pricing['service_fee_value'] ?? 0.0);
+        $serviceFeeActive = (bool) ($pricing['service_fee_active'] ?? false);
         $serviceFee = (float) ($pricing['service_fee'] ?? 0.0);
-        $collectionDeliveryFee = (float) ($pricing['collection_delivery_fee'] ?? 40.0);
-        $baseDeliveryFee = (float) ($pricing['base_delivery_fee'] ?? 40.0);
-        $freeDeliveryThreshold = (float) ($pricing['free_delivery_threshold'] ?? 600.0);
+        $deliveryFeeDisplayName = $pricing['delivery_fee_display_name'] ?? 'Collection & Delivery';
+        $collectionDeliveryFee = (float) ($pricing['collection_delivery_fee'] ?? 0.0);
+        $baseDeliveryFee = (float) ($pricing['base_delivery_fee'] ?? 0.0);
+        $thresholdEnabled = (bool) ($pricing['threshold_enabled'] ?? false);
+        $freeDeliveryThreshold = (float) ($pricing['free_delivery_threshold'] ?? 0.0);
+        $thresholdAfterDiscount = (bool) ($pricing['threshold_after_discount'] ?? true);
         $isFreeDelivery = (bool) ($pricing['is_free_delivery'] ?? false);
         $minOrderAmount = (float) ($pricing['min_order_amount'] ?? 150.0);
         $tipOption = (string) ($pricing['tip_option'] ?? ($confirmOptions['tip_option'] ?? '0'));
@@ -60,9 +67,11 @@
         $currentRepeatFrequency = $repeatEnabled ? ($savedSchedule['repeat_frequency'] ?? 'weekly') : 'none';
 
         $selectedPaymentMethod = $confirmOptions['payment_method'] ?? null;
-        $selectedPaymentMeta = ($selectedPaymentMethod && isset($paymentMethods[$selectedPaymentMethod]))
-            ? $paymentMethods[$selectedPaymentMethod]
-            : null;
+        if ($selectedPaymentMethod && !isset($paymentMethods[$selectedPaymentMethod])) {
+            $selectedPaymentMethod = null;
+        }
+        $selectedPaymentMeta = $selectedPaymentMethod ? $paymentMethods[$selectedPaymentMethod] : null;
+        $hasPaymentMethods = !empty($paymentMethods);
 
         $addressType = strtoupper((string) ($savedAddress['address_type'] ?? 'HOME'));
         $isHotelAddress = $addressType === 'HOTEL' || ($savedAddress['collection_mode'] ?? '') === 'hotel';
@@ -84,7 +93,10 @@
           data-min-order="{{ number_format($minOrderAmount, 2, '.', '') }}"
           data-services-subtotal="{{ number_format($estimatedServicesTotal, 2, '.', '') }}"
           data-service-fee="{{ number_format($serviceFee, 2, '.', '') }}"
-          data-delivery-fee="{{ number_format($collectionDeliveryFee, 2, '.', '') }}">
+          data-delivery-fee="{{ number_format($collectionDeliveryFee, 2, '.', '') }}"
+          data-stripe-key="{{ $stripePublishableKey ?? '' }}"
+          data-stripe-configured="{{ !empty($stripeConfigured) ? '1' : '0' }}"
+          data-setup-intent-url="{{ route('booking.stripe.setup-intent') }}">
 
         <div class="booking-card-shell booking-confirm-shell mx-auto">
 
@@ -158,43 +170,44 @@
                                     <span class="rc-price-value">
                                         @if (!empty($svc['is_wash_fold']) && !empty($svc['price']))
                                             <span class="rc-price-pill">{{ $currency }} {{ number_format((float) $svc['price'], 2) }} / {{ $svc['unit'] ?: 'kg' }}</span>
-                                        @elseif (!empty($svc['price']))
-                                            <span class="rc-price-pill">ITEM BASED (From {{ $currency }} {{ number_format((float) $svc['price'], 2) }}/{{ $svc['unit'] ?: 'pc' }})</span>
                                         @else
-                                            <span class="rc-price-pill">ITEM BASED</span>
+                                            <span class="rc-price-pill">Item-Based</span>
                                         @endif
                                     </span>
                                 </div>
                             @endforeach
 
-                            <!-- Selected Services Estimated Base Rate -->
-                            <div class="rc-price-row">
-                                <span class="rc-price-label text-secondary">Selected Services (Base Estimate)</span>
-                                <span class="rc-price-value fw-bold" id="priceSelectedServicesValue">
-                                    {{ $currency }} {{ number_format($estimatedServicesTotal, 2) }}
-                                </span>
-                            </div>
-
                             <!-- Service Fee -->
                             <div class="rc-price-row">
-                                <span class="rc-price-label text-secondary">Service Fee</span>
+                                <span class="rc-price-label text-secondary">
+                                    {{ $serviceFeeDisplayName }}
+                                    @if ($serviceFeeActive && $serviceFeeType === 'percentage')
+                                        <small class="d-block text-muted" style="font-size: 0.72rem;">
+                                            {{ number_format($serviceFeeValue, 2) }}% applied to confirmed order subtotal
+                                        </small>
+                                    @endif
+                                </span>
                                 <span class="rc-price-value" id="priceServiceFeeValue">
-                                    {{ $currency }} {{ number_format($serviceFee, 2) }}
+                                    @if ($serviceFeeActive && $serviceFeeType === 'percentage' && $serviceFee == 0)
+                                        {{ number_format($serviceFeeValue, 2) }}%
+                                    @else
+                                        {{ $currency }} {{ number_format($serviceFee, 2) }}
+                                    @endif
                                 </span>
                             </div>
 
-                            <!-- Collection & Delivery Fee (Respects Store Free Threshold >= BDT 600.00) -->
+                            <!-- Collection & Delivery Fee -->
                             <div class="rc-price-row">
                                 <span class="rc-price-label text-secondary">
-                                    Collection &amp; Delivery
-                                    @if (!$isFreeDelivery && $freeDeliveryThreshold > 0)
+                                    {{ $deliveryFeeDisplayName }}
+                                    @if (!$isFreeDelivery && $thresholdEnabled && $freeDeliveryThreshold > 0)
                                         <small class="d-block text-muted" style="font-size: 0.72rem;">
-                                            Free on orders over {{ $currency }} {{ number_format($freeDeliveryThreshold, 0) }}
+                                            Free on confirmed orders of {{ $currency }} {{ number_format($freeDeliveryThreshold, 0) }}+ ({{ $thresholdAfterDiscount ? 'after' : 'before' }} discounts)
                                         </small>
                                     @endif
                                 </span>
                                 <span class="rc-price-value" id="priceDeliveryFeeValue">
-                                    @if ($isFreeDelivery)
+                                    @if ($isFreeDelivery || $collectionDeliveryFee <= 0)
                                         <span class="rc-free-badge">FREE</span>
                                     @else
                                         {{ $currency }} {{ number_format($collectionDeliveryFee, 2) }}
@@ -210,23 +223,16 @@
                                 </span>
                             </div>
 
-                            <!-- Estimated Total After Item Count -->
-                            <div class="rc-price-row rc-price-estimated-row pt-2 mt-1 border-top">
-                                <span class="rc-price-label fw-semibold text-dark">
-                                    Estimated Total <small class="text-muted fw-normal">(charged after item count)</small>
-                                </span>
-                                <span class="rc-price-value fw-bold text-dark" id="priceEstimatedTotalValue">
-                                    {{ $currency }} {{ number_format($estimatedTotal, 2) }}
-                                </span>
-                            </div>
-
-                            <!-- Prominent Due Today Total Row -->
+                            <!-- Final Total Pending Weighing & Item Count -->
                             <div class="rc-due-today-bar mt-2">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <span class="rc-due-today-label">Due Today</span>
-                                    <span class="rc-due-today-amount" id="priceDueTodayValue">
-                                        {{ $currency }} {{ number_format($dueToday, 2) }}
-                                    </span>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <span class="rc-due-today-label">Order Total</span>
+                                        <span class="badge bg-warning text-dark fw-bold">Pending Inspection</span>
+                                    </div>
+                                    <div class="small text-dark fw-semibold" id="pricePendingNotice">
+                                        Final amount calculated after collection and inspection.
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -341,98 +347,6 @@
                             </div>
                         </div>
                     </section>
-
-                    <!-- 7. SUBSCRIBE & SAVE / REPEAT ORDER SCHEDULE (Synchronized with Step 3 Repeat Order setting) -->
-                    <section class="rc-section-block mb-4" aria-labelledby="headingSubscribeSave" id="subscribeSaveSection">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <h2 id="headingSubscribeSave" class="rc-section-heading mb-0">Subscribe &amp; Repeat Schedule</h2>
-                            <span class="rc-sub-note-pill">Synced with Step 3</span>
-                        </div>
-
-                        <div class="rc-subscribe-cards-stack" role="radiogroup" aria-label="Recurring collection schedule">
-                            <!-- One-Time Order (No recurring schedule) -->
-                            <label class="rc-subscribe-card {{ $currentRepeatFrequency === 'none' ? 'is-selected' : '' }}"
-                                   for="sub_freq_none"
-                                   data-repeat-card="none">
-                                <div class="d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="radio"
-                                               class="form-check-input js-confirm-repeat-radio m-0"
-                                               id="sub_freq_none"
-                                               name="confirm_repeat_frequency"
-                                               value="none"
-                                               {{ $currentRepeatFrequency === 'none' ? 'checked' : '' }}>
-                                        <span class="rc-sub-title">One-time order only</span>
-                                    </div>
-                                    <span class="rc-sub-price-tag">Standard</span>
-                                </div>
-                                <div class="rc-sub-desc">Single collection and delivery with no recurring schedule.</div>
-                            </label>
-
-                            <!-- Weekly Repeat Plan -->
-                            <label class="rc-subscribe-card {{ $currentRepeatFrequency === 'weekly' ? 'is-selected' : '' }}"
-                                   for="sub_freq_weekly"
-                                   data-repeat-card="weekly">
-                                <div class="d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="radio"
-                                               class="form-check-input js-confirm-repeat-radio m-0"
-                                               id="sub_freq_weekly"
-                                               name="confirm_repeat_frequency"
-                                               value="weekly"
-                                               {{ $currentRepeatFrequency === 'weekly' ? 'checked' : '' }}>
-                                        <span class="rc-sub-title">Weekly Collection</span>
-                                    </div>
-                                    <span class="rc-sub-price-tag">Every 7 days</span>
-                                </div>
-                                <div class="rc-sub-desc">
-                                    Reserve your preferred weekly collection slot. Standard service rates apply; no automatic recurring card charge.
-                                </div>
-                            </label>
-
-                            <!-- Bi-weekly Repeat Plan -->
-                            <label class="rc-subscribe-card {{ $currentRepeatFrequency === 'bi_weekly' ? 'is-selected' : '' }}"
-                                   for="sub_freq_bi_weekly"
-                                   data-repeat-card="bi_weekly">
-                                <div class="d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="radio"
-                                               class="form-check-input js-confirm-repeat-radio m-0"
-                                               id="sub_freq_bi_weekly"
-                                               name="confirm_repeat_frequency"
-                                               value="bi_weekly"
-                                               {{ $currentRepeatFrequency === 'bi_weekly' ? 'checked' : '' }}>
-                                        <span class="rc-sub-title">Bi-weekly Collection</span>
-                                    </div>
-                                    <span class="rc-sub-price-tag">Every 14 days</span>
-                                </div>
-                                <div class="rc-sub-desc">
-                                    Scheduled collection every two weeks. Standard service rates apply; cancel or reschedule anytime.
-                                </div>
-                            </label>
-
-                            <!-- Monthly Repeat Plan -->
-                            <label class="rc-subscribe-card {{ $currentRepeatFrequency === 'monthly' ? 'is-selected' : '' }}"
-                                   for="sub_freq_monthly"
-                                   data-repeat-card="monthly">
-                                <div class="d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="radio"
-                                               class="form-check-input js-confirm-repeat-radio m-0"
-                                               id="sub_freq_monthly"
-                                               name="confirm_repeat_frequency"
-                                               value="monthly"
-                                               {{ $currentRepeatFrequency === 'monthly' ? 'checked' : '' }}>
-                                        <span class="rc-sub-title">Monthly Collection</span>
-                                    </div>
-                                    <span class="rc-sub-price-tag">Once a month</span>
-                                </div>
-                                <div class="rc-sub-desc">
-                                    Convenient monthly laundry pickup at standard database pricing.
-                                </div>
-                            </label>
-                        </div>
-                    </section>
                 </div>
 
                 <!-- ===========================================================
@@ -475,14 +389,6 @@
                                                     @endif
                                                 </div>
                                             </div>
-
-                                            @if (!empty($svc['price']))
-                                                <span class="badge rounded-pill bg-warning text-dark fw-bold">
-                                                    {{ $currency }} {{ number_format((float) $svc['price'], 2) }}@if(!empty($svc['unit'])) / {{ $svc['unit'] }}@endif
-                                                </span>
-                                            @else
-                                                <span class="badge rounded-pill bg-light text-dark border fw-semibold">Item Based</span>
-                                            @endif
                                         </div>
 
                                         @if (!empty($svc['special_request']))
@@ -645,44 +551,54 @@
                                 @endif
                             </div>
                         </div>
+                    </section>
+                </div>
+            </div>
 
-                        <!-- 8F & 9. PAYMENT CARD & SUPPORTED PAYMENT METHOD SELECTOR -->
-                        <div class="rc-summary-card mb-2" id="confirmPaymentSection">
-                            <div class="rc-summary-card-header">
-                                <h3 class="rc-summary-card-title mb-0">Payment</h3>
-                                <button type="button"
-                                        class="rc-btn-payment-add"
-                                        id="btnTogglePaymentSelector"
-                                        aria-expanded="{{ $selectedPaymentMeta ? 'false' : 'true' }}"
-                                        aria-controls="paymentMethodSelectorPanel">
-                                    {{ $selectedPaymentMeta ? 'Edit' : 'Add' }}
-                                </button>
-                            </div>
+            <!-- ===========================================================
+                 ROW 2: FULL-WIDTH PAYMENT DETAILS
+                 =========================================================== -->
+            <div class="row mt-2 mb-3">
+                <div class="col-12">
+                    <div class="rc-summary-card mb-2" id="confirmPaymentSection">
+                        <div class="rc-summary-card-header">
+                            <h3 class="rc-summary-card-title mb-0">Enter payment details</h3>
+                            <button type="button"
+                                    class="rc-btn-payment-add"
+                                    id="btnTogglePaymentSelector"
+                                    aria-expanded="{{ $selectedPaymentMeta ? 'false' : 'true' }}"
+                                    aria-controls="paymentMethodSelectorPanel">
+                                {{ $selectedPaymentMeta ? 'Edit' : 'Change' }}
+                            </button>
+                        </div>
 
-                            <!-- Current Payment Summary Line -->
-                            <div id="selectedPaymentDisplay" class="rc-summary-body-text">
-                                @if ($selectedPaymentMeta)
-                                    <div class="d-flex align-items-center justify-content-between">
-                                        <div>
-                                            <div class="fw-bold text-dark" id="selectedPaymentName">{{ $selectedPaymentMeta['name'] }}</div>
-                                            <div class="small text-secondary" id="selectedPaymentDesc">{{ $selectedPaymentMeta['description'] }}</div>
-                                        </div>
-                                        <span class="badge rounded-pill bg-warning text-dark fw-bold" id="selectedPaymentBadge">
-                                            {{ $selectedPaymentMeta['badge'] }}
-                                        </span>
+                        <!-- Current Payment Summary Line -->
+                        <div id="selectedPaymentDisplay" class="rc-summary-body-text mb-2">
+                            @if ($selectedPaymentMeta)
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <div class="fw-bold text-dark" id="selectedPaymentName">{{ $selectedPaymentMeta['name'] }}</div>
+                                        <div class="small text-secondary" id="selectedPaymentDesc">{{ $selectedPaymentMeta['description'] }}</div>
                                     </div>
-                                @else
-                                    <div class="text-secondary small" id="unselectedPaymentPrompt">
-                                        Add a payment method to confirm your order.
-                                    </div>
-                                @endif
-                            </div>
+                                    <span class="badge rounded-pill bg-warning text-dark fw-bold" id="selectedPaymentBadge">
+                                        {{ $selectedPaymentMeta['badge'] }}
+                                    </span>
+                                </div>
+                            @else
+                                <div class="text-secondary small" id="unselectedPaymentPrompt">
+                                    Select a payment method below to confirm your order.
+                                </div>
+                            @endif
+                        </div>
 
-                            <!-- Expandable Payment Method Selection Panel (Uses actual supported business payment methods) -->
-                            <div id="paymentMethodSelectorPanel" class="rc-payment-methods-panel mt-3 pt-2 border-top d-none">
-                                <div class="small fw-bold text-dark mb-2">Select payment method:</div>
-
-                                <div class="rc-payment-methods-list" role="radiogroup" aria-label="Select payment method">
+                        <!-- Expandable Payment Method Selection Panel -->
+                        <div id="paymentMethodSelectorPanel" class="rc-payment-methods-panel mt-2 pt-3 border-top">
+                            @if (!$hasPaymentMethods)
+                                <div class="alert alert-warning mb-0 small fw-semibold" id="noPaymentMethodsAlert" role="alert">
+                                    No payment methods are currently available. Please contact support.
+                                </div>
+                            @else
+                                <div class="rc-payment-methods-list" role="radiogroup" aria-label="Enter payment details">
                                     @foreach ($paymentMethods as $pmKey => $pm)
                                         @php
                                             $isPmChecked = $selectedPaymentMethod === $pmKey;
@@ -690,9 +606,9 @@
                                         <label class="rc-payment-option-card {{ $isPmChecked ? 'is-selected' : '' }}"
                                                for="pm_radio_{{ $pmKey }}"
                                                data-payment-card="{{ $pmKey }}">
-                                            <div class="d-flex align-items-start gap-2">
+                                            <div class="d-flex align-items-start gap-2 h-100">
                                                 <input type="radio"
-                                                       class="form-check-input js-payment-method-radio mt-1"
+                                                       class="form-check-input js-payment-method-radio mt-1 flex-shrink-0"
                                                        id="pm_radio_{{ $pmKey }}"
                                                        name="payment_method_choice"
                                                        value="{{ $pmKey }}"
@@ -700,10 +616,21 @@
                                                        data-pm-desc="{{ $pm['description'] }}"
                                                        data-pm-badge="{{ $pm['badge'] }}"
                                                        {{ $isPmChecked ? 'checked' : '' }}>
-                                                <div class="flex-grow-1">
-                                                    <div class="d-flex align-items-center justify-content-between gap-2">
+                                                <div class="flex-grow-1 min-w-0">
+                                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                                        <span class="rc-payment-method-icon" aria-hidden="true">
+                                                            @if ($pmKey === 'stripe')
+                                                                <svg width="18" height="14" viewBox="0 0 24 18" fill="none"><rect x="1" y="1" width="22" height="16" rx="3" stroke="#171717" stroke-width="1.8"/><path d="M1 6H23" stroke="#171717" stroke-width="1.8"/><rect x="4" y="10" width="6" height="3" rx="1" fill="#FFC629"/></svg>
+                                                            @elseif ($pmKey === 'paypal')
+                                                                <span style="color:#003087;">P</span><span style="color:#0079C1;">P</span>
+                                                            @else
+                                                                <svg width="18" height="14" viewBox="0 0 24 18" fill="none"><rect x="1" y="2" width="22" height="14" rx="2.5" stroke="#171717" stroke-width="1.8"/><circle cx="12" cy="9" r="3" fill="#FFC629" stroke="#171717" stroke-width="1.4"/></svg>
+                                                            @endif
+                                                        </span>
                                                         <span class="fw-bold text-dark" style="font-size: 0.86rem;">{{ $pm['name'] }}</span>
-                                                        <span class="badge rounded-pill bg-light text-dark border" style="font-size: 0.68rem;">{{ $pm['badge'] }}</span>
+                                                    </div>
+                                                    <div class="mb-1">
+                                                        <span class="badge rounded-pill bg-light text-dark border" style="font-size: 0.66rem;">{{ $pm['badge'] }}</span>
                                                     </div>
                                                     <div class="small text-secondary" style="font-size: 0.76rem; line-height: 1.35;">
                                                         {{ $pm['description'] }}
@@ -713,29 +640,118 @@
                                         </label>
                                     @endforeach
                                 </div>
-                            </div>
 
-                            <div id="paymentMethodError" class="booking-field-error d-none mt-2" role="alert">
-                                Please click "Add" and select a payment method to continue.
-                            </div>
+                                <!-- Full-Width Selected Payment Method Details Area -->
+                                <div id="paymentDetailsArea" class="mt-3">
+                                    @if (isset($paymentMethods['stripe']))
+                                        <div id="stripeCardPanel" class="p-3 rounded-4 border {{ $selectedPaymentMethod === 'stripe' ? '' : 'd-none' }}" style="background: #FFFDF7; border-color: #FFC629 !important;">
+                                            @if (!empty($stripeConfigured))
+                                                @if (isset($savedCards) && $savedCards->isNotEmpty())
+                                                    <div class="mb-3" id="savedCardsListWrap">
+                                                        <div class="small fw-bold text-dark mb-2">Your Saved Cards</div>
+                                                        @foreach ($savedCards as $card)
+                                                            <div class="d-flex align-items-center justify-content-between border rounded-3 p-2 mb-1 bg-white">
+                                                                <label class="d-flex align-items-center gap-2 mb-0 flex-grow-1" style="cursor: pointer;">
+                                                                    <input type="radio" name="saved_card_choice" class="form-check-input js-saved-card-radio m-0" value="{{ $card->id }}">
+                                                                    <span class="small fw-semibold text-dark">{{ $card->display_label }}</span>
+                                                                </label>
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-link text-danger p-0 text-decoration-none js-delete-saved-card"
+                                                                        data-delete-url="{{ route('booking.stripe.saved-cards.destroy', $card->id) }}"
+                                                                        title="Remove saved card">Remove</button>
+                                                            </div>
+                                                        @endforeach
+                                                        <label class="d-flex align-items-center gap-2 mt-2 small fw-semibold text-dark" style="cursor: pointer;">
+                                                            <input type="radio" name="saved_card_choice" class="form-check-input js-saved-card-radio m-0" value="" checked>
+                                                            <span>Use a new card</span>
+                                                        </label>
+                                                    </div>
+                                                @endif
+
+                                                <div id="stripeNewCardWrap">
+                                                    <div id="stripeElementLoading" class="small text-secondary py-2">
+                                                        <span class="spinner-border spinner-border-sm me-1"></span> Initializing secure Stripe card fields...
+                                                    </div>
+                                                    <div id="stripePaymentElement"></div>
+                                                    <div id="stripeElementError" class="booking-field-error d-none mt-2" role="alert"></div>
+
+                                                    <div class="form-check mt-3">
+                                                        <input class="form-check-input" type="checkbox" id="stripeSaveCardCheckbox" {{ auth()->check() ? '' : 'disabled' }}>
+                                                        <label class="form-check-label small fw-semibold text-dark" for="stripeSaveCardCheckbox">
+                                                            Save this card for future payments
+                                                        </label>
+                                                        @guest
+                                                            <div class="small text-muted" style="font-size: 0.72rem;">Sign in to save cards for future orders. Stripe still stores your card securely for this order's final charge.</div>
+                                                        @endguest
+                                                    </div>
+                                                </div>
+
+                                                <div class="p-2 rounded-3 mt-3 small" style="background: #FFF8E5; border: 1px solid rgba(255,198,41,0.5); font-size: 0.74rem;">
+                                                    <div class="form-check mb-0">
+                                                        <input class="form-check-input" type="checkbox" id="stripeConsentCheckbox">
+                                                        <label class="form-check-label text-dark" for="stripeConsentCheckbox">
+                                                            I authorize FreshGo Laundry &amp; Stripe to securely store my payment method and charge the verified final order amount once my laundry is collected, weighed, and itemized. You will be notified of the final invoice before payment is initiated.
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            @else
+                                                <div class="small text-danger fw-semibold">
+                                                    Stripe is not configured yet. Please select another payment method.
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @endif
+
+                                    @if (isset($paymentMethods['paypal']))
+                                        <div id="paypalDetailsPanel" class="p-3 rounded-4 border {{ $selectedPaymentMethod === 'paypal' ? '' : 'd-none' }}" style="background: #FFFDF7; border-color: #FFC629 !important;">
+                                            <div class="fw-bold text-dark small mb-1">{{ $paymentMethods['paypal']['name'] }}</div>
+                                            <div class="small text-secondary">
+                                                {{ $paymentMethods['paypal']['description'] }} Your PayPal payment link will be available once your laundry is weighed and the final invoice is confirmed.
+                                            </div>
+                                        </div>
+                                    @endif
+
+                                    @if (isset($paymentMethods['cod']))
+                                        <div id="codDetailsPanel" class="p-3 rounded-4 border {{ $selectedPaymentMethod === 'cod' ? '' : 'd-none' }}" style="background: #FFFDF7; border-color: #FFC629 !important;">
+                                            <div class="fw-bold text-dark small mb-1">{{ $paymentMethods['cod']['name'] }}</div>
+                                            <div class="small text-secondary">
+                                                {{ $paymentMethods['cod']['instructions'] ?: $paymentMethods['cod']['description'] }}
+                                            </div>
+                                        </div>
+                                    @endif
+                                </div>
+
+                                <div class="small text-secondary mt-2 pt-2 border-top" style="font-size: 0.78rem;">
+                                    You will not be charged until your order is weighed and the final amount is confirmed.
+                                </div>
+                            @endif
                         </div>
 
-                    </section>
+                        <div id="paymentMethodError" class="booking-field-error d-none mt-2" role="alert">
+                            Please select a payment method to continue.
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- 10. CONTINUE TO PAYMENT FORM & STICKY BUTTON -->
             <form id="formBookingConfirm" action="{{ route('booking.confirm.store') }}" method="POST" novalidate>
                 @csrf
-                <input type="hidden" name="payment_method" id="formInputPaymentMethod" value="{{ $selectedPaymentMethod ?? 'cod' }}">
+                <input type="hidden" name="payment_method" id="formInputPaymentMethod" value="{{ $selectedPaymentMethod ?? ($hasPaymentMethods ? array_key_first($paymentMethods) : '') }}">
                 <input type="hidden" name="tip_option" id="formInputTipOption" value="{{ $tipOption }}">
                 <input type="hidden" name="custom_tip_amount" id="formInputCustomTipAmount" value="{{ $tipAmount }}">
                 <input type="hidden" name="repeat_frequency" id="formInputRepeatFrequency" value="{{ $currentRepeatFrequency }}">
+                <input type="hidden" name="stripe_setup_intent_id" id="formInputStripeSetupIntentId" value="">
+                <input type="hidden" name="stripe_payment_method_id" id="formInputStripePaymentMethodId" value="">
+                <input type="hidden" name="saved_payment_method_id" id="formInputSavedPaymentMethodId" value="">
+                <input type="hidden" name="save_card" id="formInputSaveCard" value="0">
+                <input type="hidden" name="stripe_consent" id="formInputStripeConsent" value="0">
 
                 <div class="booking-sticky-footer">
                     <button type="submit"
                             id="btnConfirmBooking"
-                            class="btn-booking-next w-100">
+                            class="btn-booking-next w-100"
+                            {{ !$hasPaymentMethods ? 'disabled' : '' }}>
                         <span id="btnConfirmBookingText">
                             {{ $isConfirmed ? 'BOOKING CONFIRMED ✓ (UPDATE & CONTINUE TO PAYMENT →)' : 'CONTINUE TO PAYMENT →' }}
                         </span>
@@ -749,6 +765,9 @@
 
     @include('shared.bottom-nav')
     @include('shared.offcanvas-nav')
+    @if (!empty($stripeConfigured))
+        <script src="https://js.stripe.com/v3/"></script>
+    @endif
     <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ asset('js/booking-confirm.js') }}" defer></script>
 </body>

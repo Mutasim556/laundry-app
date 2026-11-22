@@ -500,12 +500,17 @@ class BookingAddressTest extends TestCase
             ->assertSee('MD. NAIB')
             ->assertSee('FreshGo Enterprise Ltd')
             ->assertSee('+880 1724698392')
-            ->assertSee('Weekly');
+            ->assertDontSee('Subscribe &amp; Repeat Schedule', false);
+
+        $this->assertTrue(session('booking.schedule.repeat_order'));
+        $this->assertEquals('weekly', session('booking.schedule.repeat_frequency'));
 
         // Confirm final booking
-        $this->post(route('booking.confirm.store'))->assertRedirect(route('booking.confirm'));
+        $confirmResp = $this->post(route('booking.confirm.store'));
+        $confirmResp->assertRedirect();
         $this->assertNotEmpty(session('booking.confirmed_at'));
         $this->assertNotEmpty(session('booking.reference'));
+        $confirmResp->assertRedirect(route('booking.success', session('booking.reference')));
     }
 
     public function test_step_3_schedule_rejects_invalid_date_combinations_and_validates_repeat_frequency(): void
@@ -671,7 +676,9 @@ class BookingAddressTest extends TestCase
             ->assertSee('Price breakdown')
             ->assertSee('BDT 500.00')
             ->assertSee('BDT 40.00')
-            ->assertSee('BDT 540.00')
+            ->assertSee('Final amount calculated after collection and inspection.')
+            ->assertSee('Enter payment details')
+            ->assertSee('You will not be charged until your order is weighed and the final amount is confirmed.')
             ->assertSee('ROOM 305')
             ->assertSee('Use Reception')
             ->assertSee('PREMIER INN LONDON CITY TOWER HILL');
@@ -736,23 +743,23 @@ class BookingAddressTest extends TestCase
 
         // 7. Continue to Payment submission: idempotent booking reference & payment_status = pending_item_count
         $confirmSubmit1 = $this->post(route('booking.confirm.store'), [
-            'payment_method' => 'bkash',
+            'payment_method' => 'cod',
             'tip_option' => '50',
             'repeat_frequency' => 'weekly',
         ]);
-        $confirmSubmit1->assertRedirect(route('booking.confirm'));
         $firstRef = session('booking.reference');
         $this->assertNotEmpty($firstRef);
+        $confirmSubmit1->assertRedirect(route('booking.success', $firstRef));
         $this->assertEquals('pending_item_count', session('booking.payment_status'));
-        $this->assertEquals('bkash', session('booking.confirm_options.payment_method'));
+        $this->assertEquals('cod', session('booking.confirm_options.payment_method'));
 
         // Submitting identical booking again preserves the exact same booking reference (no duplicate booking)
         $confirmSubmit2 = $this->post(route('booking.confirm.store'), [
-            'payment_method' => 'bkash',
+            'payment_method' => 'cod',
             'tip_option' => '50',
             'repeat_frequency' => 'weekly',
         ]);
-        $confirmSubmit2->assertRedirect(route('booking.confirm'));
+        $confirmSubmit2->assertRedirect(route('booking.success', $firstRef));
         $this->assertEquals($firstRef, session('booking.reference'));
     }
 }

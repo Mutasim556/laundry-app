@@ -31,6 +31,7 @@
     const btnDontKnowPostcode = document.querySelector('#btnDontKnowPostcode');
 
     const addressDropdownSection = document.querySelector('#addressDropdownSection');
+    const ukAddressIdInput = document.querySelector('#ukAddressIdInput');
     const selectedAddressInput = document.querySelector('#selectedAddressInput');
     const addressDropdownTrigger = document.querySelector('#addressDropdownTrigger');
     const addressTriggerLabel = document.querySelector('#addressTriggerLabel');
@@ -57,6 +58,7 @@
 
     // Screen 3 (Hotel Search) elements
     const formHotel = document.querySelector('#formHotelAddress');
+    const hotelIdInput = document.querySelector('#hotelIdInput');
     const hotelSearchInput = document.querySelector('#hotelSearchInput');
     const hotelSearchSpinner = document.querySelector('#hotelSearchSpinner');
     const btnHotelsNearMe = document.querySelector('#btnHotelsNearMe');
@@ -270,32 +272,72 @@
         addressOptionsList.innerHTML = '';
 
         const normalizedFilter = filterQuery.trim().toUpperCase();
-        const filtered = addresses.filter(addr => !normalizedFilter || addr.toUpperCase().includes(normalizedFilter));
+        const normalizedList = addresses.map(item => {
+            if (item && typeof item === 'object') {
+                return {
+                    id: item.id ?? '',
+                    full_address: String(item.full_address || '').toUpperCase().trim(),
+                };
+            }
+            return {
+                id: '',
+                full_address: String(item || '').toUpperCase().trim(),
+            };
+        }).filter(item => item.full_address !== '');
+
+        const filtered = normalizedList.filter(item => !normalizedFilter || item.full_address.includes(normalizedFilter));
 
         if (filtered.length === 0) {
             const emptyLi = document.createElement('li');
             emptyLi.className = 'address-option-empty';
-            emptyLi.textContent = addresses.length === 0
-                ? 'No individual flat/house premises returned for this postcode. Click "+ My address isn\'t listed" below to enter your address.'
+            emptyLi.textContent = normalizedList.length === 0
+                ? 'No matching addresses found in our directory for this postcode. Click "+ My address isn\'t listed" below to enter your address manually.'
                 : 'No addresses match your filter. Click "+ My address isn\'t listed" below.';
             addressOptionsList.appendChild(emptyLi);
             return;
         }
 
         const currentVal = (selectedAddressInput?.value || '').toUpperCase();
+        const currentId = String(ukAddressIdInput?.value || '');
 
-        filtered.forEach(addr => {
-            const upperAddr = addr.toUpperCase();
+        filtered.forEach(item => {
+            const upperAddr = item.full_address;
+            const itemId = item.id !== '' ? String(item.id) : '';
+            const isSelected = (currentId && itemId && currentId === itemId) || upperAddr === currentVal;
+
             const li = document.createElement('li');
-            li.className = 'address-option-item' + (upperAddr === currentVal ? ' is-selected' : '');
+            li.className = 'address-option-item' + (isSelected ? ' is-selected' : '');
             li.setAttribute('role', 'option');
-            li.setAttribute('aria-selected', upperAddr === currentVal ? 'true' : 'false');
+            li.setAttribute('tabindex', '0');
+            li.setAttribute('aria-selected', isSelected ? 'true' : 'false');
             li.dataset.addressValue = upperAddr;
+            if (itemId) {
+                li.dataset.addressId = itemId;
+            }
             li.textContent = upperAddr;
 
-            li.addEventListener('click', () => {
-                selectDropdownAddress(upperAddr);
+            const chooseOption = () => {
+                selectDropdownAddress(upperAddr, itemId);
                 toggleAddressDropdown(false);
+                addressDropdownTrigger?.focus();
+            };
+
+            li.addEventListener('click', chooseOption);
+            li.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    chooseOption();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    li.nextElementSibling?.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    (li.previousElementSibling || addressListFilterInput)?.focus();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    toggleAddressDropdown(false);
+                    addressDropdownTrigger?.focus();
+                }
             });
 
             addressOptionsList.appendChild(li);
@@ -312,11 +354,12 @@
         }
     };
 
-    const selectDropdownAddress = (addressStr) => {
+    const selectDropdownAddress = (addressStr, addressId = '') => {
         const upper = String(addressStr || '').toUpperCase().trim();
         if (!upper) return;
 
         if (selectedAddressInput) selectedAddressInput.value = upper;
+        if (ukAddressIdInput) ukAddressIdInput.value = addressId ? String(addressId) : '';
         if (addressTriggerLabel) addressTriggerLabel.textContent = upper;
         if (inputIsManual) inputIsManual.value = '0';
 
@@ -336,6 +379,7 @@
 
     const enableManualAddressMode = (focusInput = true) => {
         if (inputIsManual) inputIsManual.value = '1';
+        if (ukAddressIdInput) ukAddressIdInput.value = '';
         manualAddressSection?.classList.remove('d-none');
         addressFollowupSection?.classList.remove('d-none');
         toggleAddressDropdown(false);
@@ -417,7 +461,9 @@
 
             lastLookedUpPostcode = data.postcode || formatted;
             ukPostcodeInput.value = lastLookedUpPostcode;
-            cachedLookupAddresses = Array.isArray(data.addresses) ? data.addresses : [];
+            cachedLookupAddresses = (Array.isArray(data.address_items) && data.address_items.length > 0)
+                ? data.address_items
+                : (Array.isArray(data.addresses) ? data.addresses : []);
 
             showPostcodeHint(data.notice || `Verified UK postcode ${lastLookedUpPostcode}.`);
 
@@ -664,6 +710,8 @@
     // =========================================================================
     // SCREEN 3: Hotel Search & Geolocation ("Show hotels near me")
     // =========================================================================
+    const btnManualHotelEntry = document.querySelector('#btnManualHotelEntry');
+
     const renderHotelResults = (hotels, emptyMessage = '') => {
         if (!hotelResultsList || !hotelResultsContainer) return;
         hotelResultsList.innerHTML = '';
@@ -683,33 +731,83 @@
 
         hotelResultsContainer.classList.remove('d-none');
 
+        const selectedId = String(hotelIdInput?.value || '');
+
         hotels.forEach(hotel => {
             const li = document.createElement('li');
-            li.className = 'hotel-result-item';
+            const isSelected = selectedId && hotel.id && String(hotel.id) === selectedId;
+            li.className = 'hotel-result-item d-flex align-items-start gap-2' + (isSelected ? ' is-selected' : '');
             li.setAttribute('role', 'option');
+            li.setAttribute('tabindex', '0');
+            li.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'hotel-result-icon mt-1 flex-shrink-0';
+            iconSpan.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"><rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M8 10h.01M16 10h.01"></path></svg>';
+
+            const textWrap = document.createElement('div');
+            textWrap.className = 'min-w-0 flex-grow-1';
 
             const nameDiv = document.createElement('div');
-            nameDiv.className = 'hotel-result-name';
+            nameDiv.className = 'hotel-result-name fw-bold';
             nameDiv.textContent = hotel.name;
 
             const addrDiv = document.createElement('div');
-            addrDiv.className = 'hotel-result-addr';
-            addrDiv.textContent = hotel.address;
+            addrDiv.className = 'hotel-result-addr text-muted small';
+            addrDiv.textContent = hotel.distance_km !== undefined && hotel.distance_km !== null
+                ? `${hotel.address} (${hotel.distance_km} km)`
+                : hotel.address;
 
-            li.appendChild(nameDiv);
-            li.appendChild(addrDiv);
+            textWrap.appendChild(nameDiv);
+            textWrap.appendChild(addrDiv);
+            li.appendChild(iconSpan);
+            li.appendChild(textWrap);
 
-            li.addEventListener('click', () => {
+            const selectHotelItem = () => {
+                if (hotelIdInput) hotelIdInput.value = hotel.id ? String(hotel.id) : '';
                 if (hotelSearchInput) hotelSearchInput.value = hotel.name;
                 if (hotelAddressInput) hotelAddressInput.value = hotel.address;
-                hotelResultsList.querySelectorAll('.hotel-result-item').forEach(el => el.classList.remove('is-selected'));
+                hotelResultsList.querySelectorAll('.hotel-result-item').forEach(el => {
+                    el.classList.remove('is-selected');
+                    el.setAttribute('aria-selected', 'false');
+                });
                 li.classList.add('is-selected');
+                li.setAttribute('aria-selected', 'true');
+                hotelResultsContainer.classList.add('d-none');
+                hotelNameError?.classList.add('d-none');
+                hotelAddressError?.classList.add('d-none');
                 validateHotelFormState();
+                hotelRoomNumberInput?.focus();
+            };
+
+            li.addEventListener('click', selectHotelItem);
+            li.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selectHotelItem();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    li.nextElementSibling?.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    (li.previousElementSibling || hotelSearchInput)?.focus();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    hotelResultsContainer.classList.add('d-none');
+                    hotelSearchInput?.focus();
+                }
             });
 
             hotelResultsList.appendChild(li);
         });
     };
+
+    btnManualHotelEntry?.addEventListener('click', () => {
+        if (hotelIdInput) hotelIdInput.value = '';
+        hotelResultsContainer?.classList.add('d-none');
+        hotelAddressInput?.focus();
+        validateHotelFormState();
+    });
 
     const searchHotelsRequest = async ({ q = '', lat = null, lon = null } = {}) => {
         hotelSearchController?.abort();
@@ -750,18 +848,30 @@
     };
 
     hotelSearchInput?.addEventListener('input', () => {
+        // Clear previously selected hotel ID when user modifies search text
+        if (hotelIdInput) hotelIdInput.value = '';
         hotelNameError?.classList.add('d-none');
         validateHotelFormState();
 
         clearTimeout(hotelDebounce);
         const query = hotelSearchInput.value.trim();
-        if (query.length < 3) {
+        if (query.length < 2) {
             hotelResultsContainer?.classList.add('d-none');
             return;
         }
         hotelDebounce = setTimeout(() => {
             searchHotelsRequest({ q: query });
-        }, 350);
+        }, 300);
+    });
+
+    hotelSearchInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown' && hotelResultsContainer && !hotelResultsContainer.classList.contains('d-none')) {
+            const firstItem = hotelResultsList?.querySelector('.hotel-result-item');
+            if (firstItem) {
+                e.preventDefault();
+                firstItem.focus();
+            }
+        }
     });
 
     hotelAddressInput?.addEventListener('input', () => {

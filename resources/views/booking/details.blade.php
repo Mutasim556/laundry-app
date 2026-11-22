@@ -62,6 +62,10 @@
         $currentLastName = old('last_name', $savedLastName !== '' ? $savedLastName : $authLastName);
         $currentCompanyName = old('company_name', $savedDetails['company_name'] ?? '');
         $currentTaxNumber = old('tax_number', $savedDetails['tax_number'] ?? '');
+        $currentCountryCode = old('country_code', $savedDetails['country_code'] ?? '+44');
+        $currentCountryIso = old('country_iso', $savedDetails['country_iso'] ?? '');
+        $countryItems = $countryList ?? \App\Support\CountryDialCodes::all();
+        $selectedCountry = \App\Support\CountryDialCodes::findByDial($currentCountryCode, $currentCountryIso ?: null);
 
         $currentCountryCode = old('country_code', $savedDetails['country_code'] ?? '+44');
         $currentPhoneNumber = old('phone_number', $savedDetails['phone_number'] ?? '');
@@ -208,17 +212,64 @@
                     <label for="phoneNumberInput" class="schedule-sublabel mb-1">Phone</label>
                     <div class="row g-2 align-items-stretch">
                         <div class="col-5 col-sm-4">
-                            <div class="contact-floating-box h-100 d-flex align-items-center">
-                                <label for="countryCodeSelect" class="visually-hidden">Country Dialing Code</label>
-                                <select id="countryCodeSelect"
-                                        name="country_code"
-                                        class="form-select contact-country-select">
-                                    @foreach ($countryCodes as $codeVal => $codeLabel)
-                                        <option value="{{ $codeVal }}" @selected($currentCountryCode === $codeVal)>
-                                            {{ $codeVal }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                            <input type="hidden" id="countryCodeInput" name="country_code" value="{{ $selectedCountry['dial'] }}">
+                            <input type="hidden" id="countryIsoInput" name="country_iso" value="{{ $selectedCountry['iso'] }}">
+
+                            <div class="country-code-picker position-relative h-100" id="countryCodePicker">
+                                <button type="button"
+                                        id="countryCodeTrigger"
+                                        class="contact-floating-box w-100 h-100 d-flex align-items-center justify-content-between gap-1 text-start bg-white"
+                                        aria-haspopup="listbox"
+                                        aria-expanded="false"
+                                        style="cursor: pointer; padding: 0 14px; min-height: 58px;">
+                                    <span id="countryCodeTriggerLabel" class="fw-bold text-dark text-nowrap" style="font-size: 0.96rem;">
+                                        {{ $selectedCountry['dial'] }}
+                                    </span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" class="flex-shrink-0 text-muted">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+
+                                <div id="countryCodeMenu"
+                                     class="country-code-menu d-none"
+                                     role="listbox"
+                                     aria-label="Country dialing codes"
+                                     style="position: absolute; top: calc(100% + 6px); left: 0; width: 290px; max-width: calc(100vw - 40px); background: #ffffff; border: 1.5px solid #FFC629; border-radius: 14px; box-shadow: 0 12px 28px rgba(0,0,0,0.12); z-index: 1050; overflow: hidden;">
+                                    <div class="p-2 border-bottom" style="background: #FFF8E5;">
+                                        <input type="text"
+                                               id="countryCodeSearch"
+                                               class="form-control form-control-sm"
+                                               placeholder="Search country or +dial code..."
+                                               autocomplete="off"
+                                               style="border-radius: 8px; border-color: #e2e8f0; font-size: 0.84rem;">
+                                    </div>
+                                    <ul id="countryCodeList" class="list-unstyled mb-0" style="max-height: 250px; overflow-y: auto;">
+                                        @foreach ($countryItems as $c)
+                                            @php
+                                                $isCur = $c['dial'] === $selectedCountry['dial'] && $c['iso'] === $selectedCountry['iso'];
+                                                $isoLower = strtolower($c['iso']);
+                                            @endphp
+                                            <li class="country-code-option d-flex align-items-center gap-2 px-3 py-2 {{ $isCur ? 'is-selected' : '' }}"
+                                                role="option"
+                                                tabindex="0"
+                                                aria-selected="{{ $isCur ? 'true' : 'false' }}"
+                                                data-dial="{{ $c['dial'] }}"
+                                                data-iso="{{ $c['iso'] }}"
+                                                data-name="{{ strtolower($c['name']) }}"
+                                                style="cursor: pointer; font-size: 0.88rem; color: #171717; {{ $isCur ? 'background: #FFF8E5; font-weight: 700;' : '' }}">
+                                                <span class="fw-bold text-start flex-shrink-0" style="min-width: 50px;">{{ $c['dial'] }}</span>
+                                                <img src="{{ asset('admin/dist/css/icons/flag-icon-css/flags/' . $isoLower . '.svg') }}"
+                                                     width="22"
+                                                     height="16"
+                                                     alt="{{ $c['name'] }} flag"
+                                                     loading="lazy"
+                                                     class="flex-shrink-0"
+                                                     style="width: 22px; height: 16px; object-fit: cover; border-radius: 2px; border: 1px solid rgba(0,0,0,0.08);">
+                                                <span class="text-truncate flex-grow-1">{{ $c['name'] }}</span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
                             </div>
                         </div>
 
@@ -243,7 +294,7 @@
                 <!-- 6. Email Address -->
                 <div class="mb-4">
                     <div class="contact-floating-box">
-                        <label for="customerEmailInput" class="contact-box-label">Email</label>
+                        <label for="customerEmailInput" class="contact-box-label">Email <span class="text-danger">*</span></label>
                         <input type="email"
                                id="customerEmailInput"
                                name="customer_email"
@@ -252,6 +303,7 @@
                                value="{{ $currentEmail }}"
                                maxlength="150"
                                autocomplete="email"
+                               aria-required="true"
                                required>
                     </div>
                     <div id="customerEmailError" class="booking-field-error d-none" role="alert"></div>
@@ -362,6 +414,17 @@
             });
         });
 
+        customerEmailInput?.addEventListener('blur', () => {
+            if (!isValidEmail(customerEmailInput.value)) {
+                if (customerEmailError) {
+                    customerEmailError.textContent = customerEmailInput.value.trim() === ''
+                        ? 'Email address is required.'
+                        : 'Please enter a valid email address.';
+                    customerEmailError.classList.remove('d-none');
+                }
+            }
+        });
+
         form.addEventListener('submit', (e) => {
             let hasError = false;
 
@@ -407,6 +470,110 @@
 
             if (hasError) {
                 e.preventDefault();
+            }
+        });
+
+        // Searchable Country Code Picker (Open: +880 | Flag Image | Country Name, Closed: +880)
+        const countryPicker = document.querySelector('#countryCodePicker');
+        const countryTrigger = document.querySelector('#countryCodeTrigger');
+        const countryTriggerLabel = document.querySelector('#countryCodeTriggerLabel');
+        const countryMenu = document.querySelector('#countryCodeMenu');
+        const countrySearch = document.querySelector('#countryCodeSearch');
+        const countryOptions = Array.from(document.querySelectorAll('.country-code-option'));
+        const countryCodeInput = document.querySelector('#countryCodeInput');
+        const countryIsoInput = document.querySelector('#countryIsoInput');
+
+        const toggleCountryMenu = (open) => {
+            if (!countryMenu || !countryTrigger) return;
+            const shouldOpen = typeof open === 'boolean' ? open : countryMenu.classList.contains('d-none');
+            countryMenu.classList.toggle('d-none', !shouldOpen);
+            countryTrigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            if (shouldOpen && countrySearch) {
+                countrySearch.value = '';
+                countryOptions.forEach(o => o.classList.remove('d-none'));
+                setTimeout(() => countrySearch.focus(), 40);
+            }
+        };
+
+        countryTrigger?.addEventListener('click', () => toggleCountryMenu());
+
+        countrySearch?.addEventListener('input', () => {
+            const q = countrySearch.value.trim().toLowerCase();
+            countryOptions.forEach(opt => {
+                const dial = (opt.dataset.dial || '').toLowerCase();
+                const iso = (opt.dataset.iso || '').toLowerCase();
+                const name = (opt.dataset.name || '').toLowerCase();
+                const matches = !q || dial.includes(q) || iso.includes(q) || name.includes(q);
+                opt.classList.toggle('d-none', !matches);
+            });
+        });
+
+        countrySearch?.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
+                const firstVisible = countryOptions.find(o => !o.classList.contains('d-none'));
+                if (firstVisible) {
+                    e.preventDefault();
+                    firstVisible.focus();
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                toggleCountryMenu(false);
+                countryTrigger?.focus();
+            }
+        });
+
+        countryOptions.forEach(opt => {
+            const choose = () => {
+                const dial = opt.dataset.dial || '+44';
+                const iso = opt.dataset.iso || 'GB';
+
+                if (countryCodeInput) countryCodeInput.value = dial;
+                if (countryIsoInput) countryIsoInput.value = iso;
+                // Closed dropdown displays ONLY the dialing code
+                if (countryTriggerLabel) {
+                    countryTriggerLabel.textContent = dial;
+                }
+
+                countryOptions.forEach(o => {
+                    const active = o === opt;
+                    o.classList.toggle('is-selected', active);
+                    o.setAttribute('aria-selected', active ? 'true' : 'false');
+                    o.style.background = active ? '#FFF8E5' : '';
+                    o.style.fontWeight = active ? '700' : '';
+                });
+
+                toggleCountryMenu(false);
+                phoneNumberInput?.focus();
+            };
+
+            opt.addEventListener('click', choose);
+            opt.addEventListener('keydown', (e) => {
+                const visible = countryOptions.filter(o => !o.classList.contains('d-none'));
+                const idx = visible.indexOf(opt);
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    choose();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    visible[idx + 1]?.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (idx > 0) {
+                        visible[idx - 1]?.focus();
+                    } else {
+                        countrySearch?.focus();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    toggleCountryMenu(false);
+                    countryTrigger?.focus();
+                }
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (countryPicker && !countryPicker.contains(e.target)) {
+                toggleCountryMenu(false);
             }
         });
 

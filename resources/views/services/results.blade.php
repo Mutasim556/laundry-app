@@ -54,7 +54,7 @@
 
             <div class="card-bottom service-card-footer">
                 <div class="service-price price-unit-block">
-                    <span class="curr-amount">BDT {{ number_format((float) $service->price, 2) }}</span>
+                    <span class="curr-amount">{{ formatMoney($service->price, $service->currency_code ?? null) }}</span>
                     @if ($service->unit)
                         <span class="curr-label">/ {{ $service->unit->short_name ?: $service->unit->name }}</span>
                     @endif

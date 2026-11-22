@@ -1,18 +1,60 @@
 <!-- Mobile Header: Profile, Greeting, Bell, Hamburger -->
 <header class="mobile-header">
-    <div class="user-profile-group">
-        <div class="avatar-wrapper">
-            <img class="avatar-img" src="{{ asset('admin/assets/images/users/3.jpg') }}" alt="Emma Carter">
-            <span class="avatar-badge" title="Online / Active"></span>
+    @auth('web')
+        @php $customer = auth('web')->user(); @endphp
+        <div class="dropdown">
+            <button type="button"
+                    class="btn p-0 border-0 bg-transparent text-start user-profile-group"
+                    id="mobileProfileDropdownBtn"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false">
+                <div class="avatar-wrapper d-flex align-items-center justify-content-center fw-bold text-dark"
+                     style="background: #FFF8E5; border: 1.8px solid #FFC629;">
+                    <span>{{ $customer->initials }}</span>
+                    <span class="avatar-badge" title="Online / Active"></span>
+                </div>
+                <div>
+                    <div class="user-greeting">
+                        <span>Hello</span>
+                        <span>👋</span>
+                    </div>
+                    <h2 class="user-name mb-0">{{ $customer->name }} ▾</h2>
+                </div>
+            </button>
+            <ul class="dropdown-menu border-0 shadow rounded-4 p-2 mt-2 customer-profile-dropdown"
+                aria-labelledby="mobileProfileDropdownBtn"
+                style="min-width: 220px;">
+                <li><a class="dropdown-item rounded-3 py-2" href="{{ route('account.profile') }}">👤 Profile</a></li>
+                <li><a class="dropdown-item rounded-3 py-2" href="{{ route('orders.index') }}">📦 My Orders</a></li>
+                <li><a class="dropdown-item rounded-3 py-2" href="{{ route('account.addresses') }}">📍 Address Book</a></li>
+                <li><a class="dropdown-item rounded-3 py-2" href="{{ route('account.payment-methods') }}">💳 Saved Payment Methods</a></li>
+                <li><hr class="dropdown-divider my-2"></li>
+                <li>
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button type="submit" class="dropdown-item rounded-3 py-2 text-danger fw-semibold">🚪 Logout</button>
+                    </form>
+                </li>
+            </ul>
         </div>
-        <div>
-            <div class="user-greeting">
-                <span>Hello</span>
-                <span>👋</span>
+    @else
+        <a href="{{ route('login') }}" class="user-profile-group text-decoration-none">
+            <div class="avatar-wrapper d-flex align-items-center justify-content-center"
+                 style="background: #FFF8E5; border: 1.8px solid #FFC629;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#171717" stroke-width="2.2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
             </div>
-            <h2 class="user-name">Emma Carter</h2>
-        </div>
-    </div>
+            <div>
+                <div class="user-greeting">
+                    <span>Welcome</span>
+                    <span>👋</span>
+                </div>
+                <h2 class="user-name mb-0">Login / Sign Up</h2>
+            </div>
+        </a>
+    @endauth
 
     <div class="header-action-group">
         <!-- Notification Bell with Yellow Indicator -->
