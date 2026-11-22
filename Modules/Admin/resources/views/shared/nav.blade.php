@@ -284,5 +284,15 @@
                 </a>
             </li>
         @endcan
+
+        @can('view-database-backups', 'admin')
+            <li class="sidebar-item {{ request()->routeIs('admin.database-backups.*') ? 'selected' : '' }}">
+                <a href="{{ route('admin.database-backups.index') }}"
+                    class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.database-backups.*') ? 'active' : '' }}">
+                    <i data-feather="database" class="sidebar-icon" aria-hidden="true"></i>
+                    <span class="hide-menu">Database Backup &amp; Restore</span>
+                </a>
+            </li>
+        @endcan
     </ul>
 </nav>

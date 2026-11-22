@@ -365,6 +365,37 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 ->middleware('permission:cancel-bookings,admin')
                 ->name('cancel');
         });
+
+        // Database Backup & Restore
+        Route::prefix('database-backups')->name('database-backups.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'index'])
+                ->middleware('permission:view-database-backups,admin')
+                ->name('index');
+            Route::post('/', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'store'])
+                ->middleware(['permission:create-database-backups,admin', 'throttle:10,1'])
+                ->name('store');
+            Route::post('/upload', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'upload'])
+                ->middleware(['permission:create-database-backups|restore-database-backups,admin', 'throttle:10,1'])
+                ->name('upload');
+            Route::get('/{backup}/download', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'download'])
+                ->middleware('permission:download-database-backups,admin')
+                ->name('download');
+            Route::post('/{backup}/verify', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'verify'])
+                ->middleware('permission:view-database-backups|create-database-backups,admin')
+                ->name('verify');
+            Route::post('/{backup}/restore', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'restore'])
+                ->middleware(['permission:restore-database-backups,admin', 'throttle:5,1'])
+                ->name('restore');
+            Route::get('/operations/{operation}/status', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'operationStatus'])
+                ->middleware('permission:view-database-backups,admin')
+                ->name('operations.status');
+            Route::delete('/{backup}', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'destroy'])
+                ->middleware('permission:delete-database-backups,admin')
+                ->name('destroy');
+            Route::post('/schedule', [\Modules\Admin\App\Http\Controllers\DatabaseBackupController::class, 'updateSchedule'])
+                ->middleware('permission:manage-database-backup-schedules,admin')
+                ->name('schedule.update');
+        });
     });
 });
 
