@@ -2,15 +2,21 @@
 
 namespace Modules\Admin\Models;
 
+use App\Models\DeliveryPersonCashTransaction;
+use App\Models\DeliveryPersonSettlement;
+use App\Models\StoreUser;
+use Illuminate\Auth\Passwords\CanResetPassword;
+use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 
-class DeliveryPerson extends Model
+class DeliveryPerson extends Authenticatable implements CanResetPasswordContract
 {
-    use HasFactory, SoftDeletes;
+    use CanResetPassword, HasFactory, Notifiable, SoftDeletes;
 
     protected $table = 'delivery_persons';
 
@@ -51,6 +57,15 @@ class DeliveryPerson extends Model
         'created_by_admin_id',
         'updated_by_admin_id',
         'archive_reason',
+        'portal_access_enabled',
+        'password',
+        'phone_normalized',
+        'last_login_at',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
     ];
 
     protected $casts = [
@@ -59,7 +74,33 @@ class DeliveryPerson extends Model
         'payment_effective_date' => 'date',
         'per_collection_rate_minor' => 'integer',
         'per_delivery_rate_minor' => 'integer',
+        'portal_access_enabled' => 'boolean',
+        'password' => 'hashed',
+        'last_login_at' => 'datetime',
     ];
+
+    public function cashTransactions(): HasMany
+    {
+        return $this->hasMany(DeliveryPersonCashTransaction::class)->orderByDesc('id');
+    }
+
+    public function settlements(): HasMany
+    {
+        return $this->hasMany(DeliveryPersonSettlement::class)->orderByDesc('settled_at');
+    }
+
+    public function isEligibleToLogin(): bool
+    {
+        return (bool) $this->portal_access_enabled
+            && $this->work_status === 'active'
+            && ! $this->trashed()
+            && ! empty($this->password);
+    }
+
+    public static function normalizePhone(?string $rawPhone, ?string $countryCode = null): ?string
+    {
+        return StoreUser::normalizePhone($rawPhone, $countryCode);
+    }
 
     public function store(): BelongsTo
     {

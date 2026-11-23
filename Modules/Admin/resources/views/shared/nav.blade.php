@@ -275,6 +275,26 @@
             </li>
         @endcan
 
+        @can('view-admin-accounts', 'admin')
+            <li class="sidebar-item {{ request()->routeIs('admin.current-account.*') ? 'selected' : '' }}">
+                <a href="{{ route('admin.current-account.index') }}"
+                    class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.current-account.*') ? 'active' : '' }}">
+                    <i data-feather="credit-card" class="sidebar-icon" aria-hidden="true"></i>
+                    <span class="hide-menu">Current Account</span>
+                </a>
+            </li>
+        @endcan
+
+        @can('view-delivery-settlements', 'admin')
+            <li class="sidebar-item {{ request()->routeIs('admin.delivery-person-settlements.*') ? 'selected' : '' }}">
+                <a href="{{ route('admin.delivery-person-settlements.index') }}"
+                    class="sidebar-link waves-effect waves-dark {{ request()->routeIs('admin.delivery-person-settlements.*') ? 'active' : '' }}">
+                    <i data-feather="dollar-sign" class="sidebar-icon" aria-hidden="true"></i>
+                    <span class="hide-menu">Delivery Settlements</span>
+                </a>
+            </li>
+        @endcan
+
         @can('manage-settings', 'admin')
             <li class="sidebar-item {{ request()->routeIs('admin.currency-settings.*') ? 'selected' : '' }}">
                 <a href="{{ route('admin.currency-settings.index') }}"

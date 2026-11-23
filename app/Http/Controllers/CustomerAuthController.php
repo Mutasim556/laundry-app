@@ -202,6 +202,8 @@ class CustomerAuthController extends Controller
                 $existingUser->forceFill(['email_verified_at' => now()])->save();
             }
 
+            \App\Models\Booking::associateVerifiedUserBookings($existingUser);
+
             $bookingDraft = $request->session()->get('booking');
             Auth::guard('web')->login($existingUser, true);
             $request->session()->regenerate();
@@ -256,6 +258,8 @@ class CustomerAuthController extends Controller
         $user->email_verified_at = $user->email_verified_at ?? now();
         $user->profile_completed_at = now();
         $user->save();
+
+        \App\Models\Booking::associateVerifiedUserBookings($user);
 
         $bookingDraft = $request->session()->get('booking');
         $request->session()->forget('otp_verified_email');

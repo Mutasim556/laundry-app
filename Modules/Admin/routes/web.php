@@ -133,6 +133,25 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::patch('{store}/toggle-status', [\Modules\Admin\Http\Controllers\StoreController::class, 'toggleStatus'])->middleware('permission:edit-stores,admin')->name('toggle-status');
             Route::delete('{store}', [\Modules\Admin\Http\Controllers\StoreController::class, 'destroy'])->middleware('permission:delete-stores,admin')->name('destroy');
 
+            // Store Portal Users Management
+            Route::prefix('{store}/users')->name('users.')->middleware('permission:edit-stores,admin')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\StoreUserManagementController::class, 'index'])->name('index');
+                Route::post('/', [\Modules\Admin\App\Http\Controllers\StoreUserManagementController::class, 'store'])->name('store');
+                Route::patch('/{storeUser}/toggle', [\Modules\Admin\App\Http\Controllers\StoreUserManagementController::class, 'toggle'])->name('toggle');
+                Route::post('/{storeUser}/reset-password', [\Modules\Admin\App\Http\Controllers\StoreUserManagementController::class, 'resetPassword'])->name('reset-password');
+            });
+
+            // Store Account & Ledger
+            Route::get('{store}/account', [\Modules\Admin\App\Http\Controllers\StoreAccountController::class, 'show'])
+                ->middleware('permission:view-store-accounts|view-stores,admin')
+                ->name('account.show');
+            Route::post('{store}/account/adjust', [\Modules\Admin\App\Http\Controllers\StoreAccountController::class, 'adjust'])
+                ->middleware('permission:adjust-store-accounts,admin')
+                ->name('account.adjust');
+            Route::post('{store}/account/transactions/{transaction}/reverse', [\Modules\Admin\App\Http\Controllers\StoreAccountController::class, 'reverse'])
+                ->middleware('permission:adjust-store-accounts,admin')
+                ->name('account.reverse');
+
             // Vendors Management
             Route::prefix('vendors')->name('vendors.')->group(function () {
                 Route::middleware('permission:manage-vendors,admin')->group(function () {
@@ -365,6 +384,35 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 ->middleware('permission:cancel-bookings,admin')
                 ->name('cancel');
         });
+
+        // Admin Current Account & Ledger
+        Route::prefix('current-account')->name('current-account.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'index'])
+                ->middleware('permission:view-admin-accounts,admin')
+                ->name('index');
+            Route::post('/adjust', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'adjust'])
+                ->middleware('permission:adjust-admin-accounts,admin')
+                ->name('adjust');
+            Route::post('/transactions/{transaction}/reverse', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'reverse'])
+                ->middleware('permission:adjust-admin-accounts,admin')
+                ->name('reverse');
+        });
+
+        // Delivery Person Cash Settlements, Online Transfer Verification & Portal Access
+        Route::prefix('delivery-person-settlements')->name('delivery-person-settlements.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryPersonSettlementController::class, 'index'])
+                ->middleware('permission:view-delivery-settlements,admin')
+                ->name('index');
+            Route::post('/', [\Modules\Admin\App\Http\Controllers\DeliveryPersonSettlementController::class, 'store'])
+                ->middleware('permission:manage-delivery-settlements,admin')
+                ->name('store');
+        });
+        Route::post('booking-payments/{payment}/verify', [\Modules\Admin\App\Http\Controllers\DeliveryPersonSettlementController::class, 'verifyTransfer'])
+            ->middleware('permission:manage-delivery-settlements,admin')
+            ->name('booking-payments.verify');
+        Route::post('delivery-persons/{deliveryPerson}/portal-access', [\Modules\Admin\App\Http\Controllers\DeliveryPersonSettlementController::class, 'updatePortalAccess'])
+            ->middleware('permission:manage-delivery-settlements|manage-bookings,admin')
+            ->name('delivery-persons.portal-access');
 
         // Database Backup & Restore
         Route::prefix('database-backups')->name('database-backups.')->group(function () {

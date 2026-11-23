@@ -7,8 +7,13 @@ use App\Mail\BookingNotificationMail;
 use App\Models\Booking;
 use App\Models\BookingAuditLog;
 use App\Models\BookingOperationalItem;
+use App\Services\BookingFinancialSettlementService;
 use App\Services\BookingInvoiceService;
+use App\Services\BookingProfitService;
 use App\Services\CurrencyService;
+use App\Services\StoreAccountService;
+use App\Services\StoreEarningsService;
+use RuntimeException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -106,6 +111,14 @@ class BookingManagementController extends Controller
             'currentFinalDeliveryAssignment.deliveryPerson.postcodes',
             'deliveryAssignments.deliveryPerson',
             'deliveryAssignments.store',
+            'currentStoreEarning',
+            'currentFinancialSettlement',
+            'currentStoreHandover.acceptedByStoreUser',
+            'currentStoreHandover.rejectedByStoreUser',
+            'storeHandovers.store',
+            'storeHandovers.collectionDeliveryPerson',
+            'storeHandovers.acceptedByStoreUser',
+            'storeHandovers.rejectedByStoreUser',
         ]);
 
         $currencyService = $this->currencyService;
@@ -125,6 +138,8 @@ class BookingManagementController extends Controller
         $hasValidCollectionCourier = $booking->hasValidCollectionCourierAssignment();
         $hasValidFinalDeliveryCourier = $booking->hasValidFinalDeliveryCourierAssignment();
         $isInvoiceEligible = $booking->isInvoiceEligible($this->currencyService);
+        $financialAllocation = app(BookingFinancialSettlementService::class)->buildPreview($booking);
+        $profitSummary = app(BookingProfitService::class)->calculateForBooking($booking);
 
         return view('admin::bookings.show', compact(
             'booking',
@@ -142,7 +157,9 @@ class BookingManagementController extends Controller
             'finalDeliveryAssignment',
             'hasValidCollectionCourier',
             'hasValidFinalDeliveryCourier',
-            'isInvoiceEligible'
+            'isInvoiceEligible',
+            'financialAllocation',
+            'profitSummary'
         ));
     }
 
@@ -833,6 +850,17 @@ class BookingManagementController extends Controller
                     'removed_at' => now()->toIso8601String(),
                 ]);
 
+                \App\Models\BookingOperationalCategory::query()
+                    ->where('booking_id', $lockedBooking->id)
+                    ->where('item_category_id', $rmCatId)
+                    ->update([
+                        'is_removed' => true,
+                        'removed_by_type' => 'admin',
+                        'removed_by_id' => $this->adminId(),
+                        'removed_at' => now(),
+                        'removal_reason' => trim((string) $rmData['reason']),
+                    ]);
+
                 $this->logAudit($request, $lockedBooking, 'category_removed', "Removed operational category: {$catName}", [
                     'category_id' => $rmCatId,
                     'category_name' => $catName,
@@ -952,10 +980,31 @@ class BookingManagementController extends Controller
                     'catalog_unit_price_minor' => $catalogMinor,
                     'actual_unit_price_minor' => $actualMinor,
                     'is_price_overridden' => $actualMinor !== $catalogMinor,
+                    'origin_type' => \App\Models\BookingOperationalCategory::ORIGIN_ADMIN,
+                    'origin_actor_id' => $this->adminId(),
                     'adjustment_reason' => trim((string) ($newInput['adjustment_reason'] ?? '')) ?: null,
                     'adjusted_by_admin_id' => $this->adminId(),
                     'adjusted_at' => now(),
                 ]);
+
+                if ($svc->item_category_id) {
+                    $prov = \App\Models\BookingOperationalCategory::query()
+                        ->where('booking_id', $lockedBooking->id)
+                        ->where('item_category_id', $svc->item_category_id)
+                        ->first();
+                    if (! $prov) {
+                        \App\Models\BookingOperationalCategory::create([
+                            'booking_id' => $lockedBooking->id,
+                            'item_category_id' => $svc->item_category_id,
+                            'category_name' => $svc->category?->name ?? 'Service',
+                            'origin_type' => \App\Models\BookingOperationalCategory::ORIGIN_ADMIN,
+                            'origin_actor_id' => $this->adminId(),
+                            'is_removed' => false,
+                        ]);
+                    } elseif ($prov->is_removed) {
+                        $prov->update(['is_removed' => false, 'removed_at' => null, 'removed_by_type' => null, 'removed_by_id' => null]);
+                    }
+                }
                 $newLine->line_total_minor = $newLine->computeLineTotalMinor();
                 $newLine->save();
 
@@ -1108,28 +1157,39 @@ class BookingManagementController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($request, $booking, $oldStatus, $targetStatus, $validated, $changedAt) {
-            if (array_key_exists($oldStatus, Booking::OPERATIONAL_STATUSES)) {
-                $stages = is_array($booking->completed_operational_stages) ? $booking->completed_operational_stages : [];
-                $stages[$oldStatus] = [
-                    'completed_at' => $changedAt,
-                    'admin_id' => $this->adminId(),
-                ];
-                $booking->completed_operational_stages = $stages;
-            }
-            $booking->booking_status = $targetStatus;
-            $booking->version = ((int) $booking->version) + 1;
-            $booking->save();
+        try {
+            DB::transaction(function () use ($request, $booking, $oldStatus, $targetStatus, $validated, $changedAt) {
+                if (array_key_exists($oldStatus, Booking::OPERATIONAL_STATUSES)) {
+                    $stages = is_array($booking->completed_operational_stages) ? $booking->completed_operational_stages : [];
+                    $stages[$oldStatus] = [
+                        'completed_at' => $changedAt,
+                        'admin_id' => $this->adminId(),
+                    ];
+                    $booking->completed_operational_stages = $stages;
+                }
+                $booking->booking_status = $targetStatus;
+                $booking->version = ((int) $booking->version) + 1;
+                $booking->save();
 
-            $this->logAudit($request, $booking, 'status_changed', "Status changed from {$oldStatus} to {$targetStatus}", [
-                'completed_stage' => array_key_exists($oldStatus, Booking::OPERATIONAL_STATUSES) ? $oldStatus : null,
-                'previous_status' => $oldStatus,
-                'new_status' => $targetStatus,
-                'changed_by' => $this->adminId(),
-                'changed_at' => $changedAt,
-                'reason' => $validated['status_note'] ?? null,
-            ]);
-        });
+                $this->logAudit($request, $booking, 'status_changed', "Status changed from {$oldStatus} to {$targetStatus}", [
+                    'completed_stage' => array_key_exists($oldStatus, Booking::OPERATIONAL_STATUSES) ? $oldStatus : null,
+                    'previous_status' => $oldStatus,
+                    'new_status' => $targetStatus,
+                    'changed_by' => $this->adminId(),
+                    'changed_at' => $changedAt,
+                    'reason' => $validated['status_note'] ?? null,
+                ]);
+
+                if ($oldStatus === Booking::STATUS_FINALIZED || $booking->isInvoiceEligible($this->currencyService)) {
+                    app(StoreEarningsService::class)->getOrCreateSnapshotForBooking($booking, $this->adminId());
+                }
+                if ($oldStatus === Booking::STATUS_COMPLETED && $booking->booking_status === Booking::STATUS_COMPLETED) {
+                    app(BookingFinancialSettlementService::class)->settleCompletedBooking($booking, $this->adminId());
+                }
+            });
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['booking_status' => $e->getMessage()]);
+        }
 
         $this->notifyCustomerIfApplicable($booking, $targetStatus, $request->boolean('notify_customer', true));
 
@@ -1153,7 +1213,8 @@ class BookingManagementController extends Controller
             'version' => ['nullable', 'integer'],
         ]);
 
-        $result = DB::transaction(function () use ($request, $booking, $validated) {
+        try {
+            $result = DB::transaction(function () use ($request, $booking, $validated) {
             $locked = Booking::where('id', $booking->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->booking_status === Booking::STATUS_CANCELLED) {
@@ -1221,8 +1282,19 @@ class BookingManagementController extends Controller
                 'changed_at' => $nowIso,
             ]);
 
+            if ($currentStage === Booking::STATUS_FINALIZED || $locked->isInvoiceEligible($this->currencyService)) {
+                app(StoreEarningsService::class)->getOrCreateSnapshotForBooking($locked, $this->adminId());
+            }
+
+            if ($currentStage === Booking::STATUS_COMPLETED && $locked->booking_status === Booking::STATUS_COMPLETED) {
+                app(BookingFinancialSettlementService::class)->settleCompletedBooking($locked, $this->adminId());
+            }
+
             return ['completed_stage' => $currentStage, 'new_status' => $targetStage, 'booking' => $locked];
-        });
+            });
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['booking_status' => $e->getMessage()]);
+        }
 
         $this->notifyCustomerIfApplicable($result['booking'], $result['new_status'], $request->boolean('notify_customer', true));
 
@@ -1446,6 +1518,8 @@ class BookingManagementController extends Controller
             $locked->assigned_store_id = $store->id;
             $locked->save();
 
+            app(\App\Services\StoreHandoverService::class)->cancelPendingForStoreChange($locked, $store->id, $this->adminId());
+
             $this->logAudit(
                 $request,
                 $locked,
@@ -1485,6 +1559,7 @@ class BookingManagementController extends Controller
                 'postcode_match' => (bool) $assignment->postcode_matched,
                 'assigned_at' => $assignment->assigned_at?->format('d M Y, H:i'),
                 'can_complete_store_stage' => true,
+                'profit_summary' => app(BookingProfitService::class)->calculateForBooking($booking->fresh()),
             ]);
         }
 
@@ -1581,6 +1656,7 @@ class BookingManagementController extends Controller
                 DeliveryAssignment::TYPE_CUSTOMER_COLLECTION,
                 DeliveryAssignment::TYPE_FINAL_DELIVERY,
             ])],
+            'delivery_payment' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'override_reason' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -1621,9 +1697,51 @@ class BookingManagementController extends Controller
         $courierAddress = $person->full_residential_address
             ?: (implode(', ', array_filter([$person->address_line_1, $person->city, $person->residential_postcode])) ?: 'Address not provided');
 
+        $defaultSplit = BookingFinancialSettlementService::splitMinorHalf((int) ($booking->collection_delivery_fee_minor ?? 0));
+        $tipSplit = BookingFinancialSettlementService::splitMinorHalf((int) ($booking->tip_amount_minor ?? 0));
+        $defaultRateMinor = $assignmentType === DeliveryAssignment::TYPE_CUSTOMER_COLLECTION
+            ? $defaultSplit['collection']
+            : $defaultSplit['final'];
+        $tipShareMinor = $assignmentType === DeliveryAssignment::TYPE_CUSTOMER_COLLECTION
+            ? $tipSplit['collection']
+            : $tipSplit['final'];
+
+        $hasExplicitPayment = array_key_exists('delivery_payment', $validated) && $validated['delivery_payment'] !== null && $validated['delivery_payment'] !== '';
+        $requestedRateMinor = $hasExplicitPayment
+            ? StoreAccountService::decimalToMinor($validated['delivery_payment'])
+            : null;
+
+        if ($existingAssignment && $existingAssignment->earnings_status === 'credited') {
+            $msg = 'Delivery assignment earnings have already been credited; use a compensating adjustment instead.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg], 422)
+                : back()->withErrors(['delivery_person_id' => $msg]);
+        }
+
         if ($existingAssignment && (int) $existingAssignment->delivery_person_id === (int) $person->id) {
-            $msg = "Delivery person \"{$person->full_name}\" is already assigned for this leg.";
+            if ($requestedRateMinor !== null && $requestedRateMinor !== (int) $existingAssignment->rate_minor) {
+                $existingAssignment->update([
+                    'rate_minor' => $requestedRateMinor,
+                    'tip_share_minor' => $tipShareMinor,
+                    'is_manual_rate_override' => $requestedRateMinor !== $defaultRateMinor,
+                    'rate_override_reason' => trim((string) ($validated['override_reason'] ?? '')) ?: $existingAssignment->rate_override_reason,
+                ]);
+                $this->logAudit($request, $booking, 'delivery_payment_updated', "Updated {$assignmentType} delivery payment for {$person->full_name}", [
+                    'assignment_id' => $existingAssignment->id,
+                    'rate_minor' => $requestedRateMinor,
+                    'tip_share_minor' => $tipShareMinor,
+                    'updated_by' => $this->adminId(),
+                ]);
+                $msg = "Updated delivery payment for \"{$person->full_name}\".";
+            } else {
+                $msg = "Delivery person \"{$person->full_name}\" is already assigned for this leg.";
+            }
+
             if ($request->expectsJson()) {
+                $booking->refresh();
+                $preview = app(BookingFinancialSettlementService::class)->buildPreview($booking);
+                $totalMinor = (int) $existingAssignment->rate_minor + (int) $existingAssignment->tip_share_minor;
+
                 return response()->json([
                     'success' => true,
                     'message' => $msg,
@@ -1640,6 +1758,14 @@ class BookingManagementController extends Controller
                     'status' => $existingAssignment->status,
                     'status_label' => DeliveryAssignment::STATUS_LABELS[$existingAssignment->status] ?? ucfirst((string) $existingAssignment->status),
                     'assigned_at' => $existingAssignment->assigned_at?->format('d M Y, H:i'),
+                    'rate_minor' => (int) $existingAssignment->rate_minor,
+                    'tip_share_minor' => (int) $existingAssignment->tip_share_minor,
+                    'total_expected_earnings_minor' => $totalMinor,
+                    'delivery_payment_formatted' => $this->currencyService->formatMinor((int) $existingAssignment->rate_minor),
+                    'tip_share_formatted' => $this->currencyService->formatMinor((int) $existingAssignment->tip_share_minor),
+                    'total_earnings_formatted' => $this->currencyService->formatMinor($totalMinor),
+                    'financial_preview' => $preview,
+                    'profit_summary' => app(BookingProfitService::class)->calculateForBooking($booking),
                     'can_complete_stage' => true,
                 ]);
             }
@@ -1683,6 +1809,7 @@ class BookingManagementController extends Controller
             $reason,
             $postcodeMatched,
             $matchedPostcode,
+            $requestedRateMinor,
             $logistics
         ) {
             if ($isReassignment && $existingAssignment) {
@@ -1714,7 +1841,7 @@ class BookingManagementController extends Controller
                 $assignmentType,
                 $booking->assignedStore,
                 (int) $this->adminId(),
-                null,
+                $requestedRateMinor,
                 $isReassignment ? $reason : null,
                 $postcodeMatched ? null : $reason
             );
@@ -1746,6 +1873,10 @@ class BookingManagementController extends Controller
             : "{$legLabel} delivery person \"{$person->full_name}\" assigned successfully.";
 
         if ($request->expectsJson()) {
+            $booking->refresh();
+            $preview = app(BookingFinancialSettlementService::class)->buildPreview($booking);
+            $totalMinor = (int) $assignment->rate_minor + (int) $assignment->tip_share_minor;
+
             return response()->json([
                 'success' => true,
                 'message' => $message,
@@ -1762,6 +1893,14 @@ class BookingManagementController extends Controller
                 'status' => $assignment->status,
                 'status_label' => DeliveryAssignment::STATUS_LABELS[$assignment->status] ?? ucfirst((string) $assignment->status),
                 'assigned_at' => $assignment->assigned_at?->format('d M Y, H:i'),
+                'rate_minor' => (int) $assignment->rate_minor,
+                'tip_share_minor' => (int) $assignment->tip_share_minor,
+                'total_expected_earnings_minor' => $totalMinor,
+                'delivery_payment_formatted' => $this->currencyService->formatMinor((int) $assignment->rate_minor),
+                'tip_share_formatted' => $this->currencyService->formatMinor((int) $assignment->tip_share_minor),
+                'total_earnings_formatted' => $this->currencyService->formatMinor($totalMinor),
+                'financial_preview' => $preview,
+                'profit_summary' => app(BookingProfitService::class)->calculateForBooking($booking),
                 'can_complete_stage' => true,
             ]);
         }

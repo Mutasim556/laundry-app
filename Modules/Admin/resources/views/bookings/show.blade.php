@@ -1227,8 +1227,287 @@
                         <div class="small text-end mt-1" style="color: #B45309;">{{ $pricingSummary['pending_reasons'][0] }}</div>
                     @endif
                 </div>
+
+                @if(isset($financialAllocation))
+                    @php
+                        $faMargin = (int) $financialAllocation['admin_delivery_margin_minor'];
+                        $faShortfall = $faMargin < 0;
+                    @endphp
+                    <div class="mt-3 p-2 px-3 rounded-3 small" style="background-color: #F8FAFC; border: 1px solid #E2E8F0;" id="paymentSummaryAllocationBox">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold" style="color: #1E293B; font-size: 0.78rem;">
+                                <i class="mdi mdi-cash-multiple text-primary me-1"></i>Delivery &amp; Admin Settlement
+                            </span>
+                            <span class="badge bg-{{ $financialAllocation['financial_status_badge'] }}-subtle text-{{ $financialAllocation['financial_status_badge'] }}" id="summaryFinancialStatusBadge" style="font-size: 0.68rem;">
+                                {{ $financialAllocation['financial_status'] }}
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted">Collection Delivery Payment</span>
+                            <span class="fw-semibold text-dark" id="summaryColPayment">{{ $currencyService->formatMinor((int) $financialAllocation['collection_payment_minor'], $booking->currency) }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted">Final Delivery Payment</span>
+                            <span class="fw-semibold text-dark" id="summaryFinPayment">{{ $currencyService->formatMinor((int) $financialAllocation['final_payment_minor'], $booking->currency) }}</span>
+                        </div>
+                        @if((int) $financialAllocation['customer_tip_minor'] > 0)
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="text-muted">Tip Split (50% / 50%)</span>
+                                <span class="fw-semibold text-dark">{{ $currencyService->formatMinor((int) $financialAllocation['collection_tip_share_minor'], $booking->currency) }} / {{ $currencyService->formatMinor((int) $financialAllocation['final_tip_share_minor'], $booking->currency) }}</span>
+                            </div>
+                        @endif
+                        <div class="d-flex justify-content-between align-items-center mb-1 pt-1 border-top">
+                            <span class="text-muted">Admin Delivery Margin</span>
+                            <span class="fw-bold {{ $faShortfall ? 'text-danger' : 'text-success' }}" id="summaryAdminMargin">
+                                {{ $faShortfall ? '-' : '' }}{{ $currencyService->formatMinor(abs($faMargin), $booking->currency) }}
+                                @if($faShortfall)
+                                    <span class="badge bg-danger-subtle text-danger ms-1" style="font-size: 0.65rem;">Shortfall</span>
+                                @endif
+                            </span>
+                        </div>
+                        @if((int) $financialAllocation['advance_received_minor'] > 0)
+                            <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top">
+                                <span class="text-muted">Advance Settlement</span>
+                                <span class="badge bg-{{ $financialAllocation['advance_badge'] }}-subtle text-{{ $financialAllocation['advance_badge'] }}" style="font-size: 0.68rem;">
+                                    {{ $financialAllocation['advance_status'] }} ({{ $currencyService->formatMinor((int) $financialAllocation['advance_received_minor'], $booking->currency) }})
+                                </span>
+                            </div>
+                        @endif
+                    </div>
+                @endif
             </div>
         </div>
+    </div>
+
+    @if(isset($profitSummary))
+        @php
+            $psTotalProfit = (int) $profitSummary['total_profit_minor'];
+            $psIsPositive = $psTotalProfit >= 0;
+            $psCanShowNumbers = $profitSummary['is_finalized'] || $profitSummary['has_provisional_estimate'];
+        @endphp
+        <!-- Booking Profit Summary (Compact Contribution Profit Card) -->
+        <div class="card border-0 mb-3" id="bookingProfitSummaryCard"
+             style="background-color: #F5F3FF; border: 1px solid #C4B5FD !important; border-radius: 16px; box-shadow: 0 4px 14px rgba(109, 40, 217, 0.06);">
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+                              style="width: 32px; height: 32px; background-color: #EDE9FE; color: #6D28D9;">
+                            <i class="mdi mdi-chart-line"></i>
+                        </span>
+                        <div>
+                            <h6 class="fw-bold mb-0" style="color: #6D28D9;">Booking Profit Summary</h6>
+                            <div class="small" style="color: #5B21B6; font-size: 0.76rem;">Contribution profit before unrecorded business overhead ({{ $profitSummary['currency'] }})</div>
+                        </div>
+                    </div>
+                    <span id="profitSummaryStatusBadge"
+                          class="badge rounded-pill px-3 py-1 bg-{{ $profitSummary['status_badge'] }}-subtle text-{{ $profitSummary['status_badge'] }}"
+                          style="font-size: 0.74rem;">
+                        {{ $profitSummary['status_label'] }}
+                    </span>
+                </div>
+
+                @if(!$psCanShowNumbers)
+                    <div id="profitNotFinalizedNotice" class="bg-white rounded-3 p-3 border small text-center" style="border-color: #DDD6FE !important; color: #64748B;">
+                        <i class="mdi mdi-clock-outline text-warning me-1"></i>
+                        <strong>Profit Not Finalized</strong> &mdash; Complete store assignment and operational pricing to view provisional or finalized booking profit.
+                    </div>
+                @endif
+
+                <div id="profitBreakdownContent" class="{{ $psCanShowNumbers ? '' : 'd-none' }}">
+                    <div class="row g-2 g-md-3 mb-3">
+                        <!-- Block 1: Store Contribution -->
+                        <div class="col-12 col-lg-4">
+                            <div class="bg-white rounded-3 p-3 h-100 border small" style="border-color: #DDD6FE !important;">
+                                <div class="fw-bold text-uppercase mb-2" style="color: #6D28D9; font-size: 0.72rem; letter-spacing: 0.04em;">Store Contribution</div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-muted">Eligible Service Revenue</span>
+                                    <span class="fw-semibold text-dark" id="profitEligibleService">{{ $profitSummary['formatted']['eligible_service_revenue'] }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="text-muted">
+                                        Store Net Earnings
+                                        @if($profitSummary['store_commission_rate'] !== null)
+                                            <span class="badge bg-light text-secondary border ms-1" style="font-size: 0.65rem;">{{ number_format((float) $profitSummary['store_commission_rate'], 1) }}% comm.</span>
+                                        @endif
+                                    </span>
+                                    <span class="fw-semibold text-danger" id="profitStoreNet">-{{ $profitSummary['formatted']['store_net_earnings'] }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                                    <span class="fw-semibold text-dark">Store Contribution</span>
+                                    <strong class="{{ (int) $profitSummary['store_contribution_minor'] >= 0 ? 'text-success' : 'text-danger' }}" id="profitStoreContribution">{{ $profitSummary['formatted']['store_contribution'] }}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Block 2: Delivery Contribution -->
+                        <div class="col-12 col-lg-4">
+                            <div class="bg-white rounded-3 p-3 h-100 border small" style="border-color: #DDD6FE !important;">
+                                <div class="fw-bold text-uppercase mb-2" style="color: #6D28D9; font-size: 0.72rem; letter-spacing: 0.04em;">Delivery Contribution</div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-muted">Customer Delivery Charge</span>
+                                    <span class="fw-semibold text-dark" id="profitDeliveryCharge">{{ $profitSummary['formatted']['delivery_fee'] }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-muted">Collection Person Payment</span>
+                                    <span class="fw-semibold text-danger" id="profitCollectionPay">-{{ $profitSummary['formatted']['collection_payment'] }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="text-muted">Final Person Payment</span>
+                                    <span class="fw-semibold text-danger" id="profitFinalPay">-{{ $profitSummary['formatted']['final_payment'] }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                                    <span class="fw-semibold text-dark" id="profitDeliveryLabel">{{ (int) $profitSummary['delivery_contribution_minor'] < 0 ? 'Delivery Loss' : 'Delivery Profit' }}</span>
+                                    <strong class="{{ (int) $profitSummary['delivery_contribution_minor'] >= 0 ? 'text-success' : 'text-danger' }}" id="profitDeliveryContribution">{{ $profitSummary['formatted']['delivery_contribution'] }}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Block 3: Other Platform & Pass-Throughs -->
+                        <div class="col-12 col-lg-4">
+                            <div class="bg-white rounded-3 p-3 h-100 border small" style="border-color: #DDD6FE !important;">
+                                <div class="fw-bold text-uppercase mb-2" style="color: #6D28D9; font-size: 0.72rem; letter-spacing: 0.04em;">Platform Fees &amp; Pass-Throughs</div>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="text-muted">Platform Service Fee</span>
+                                    <span class="fw-semibold text-dark" id="profitServiceFee">{{ $profitSummary['formatted']['service_fee'] }}</span>
+                                </div>
+                                @if((int) $profitSummary['discount_minor'] > 0)
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted">Booking Discount</span>
+                                        <span class="fw-semibold text-danger" id="profitDiscount">-{{ $profitSummary['formatted']['discount'] }}</span>
+                                    </div>
+                                @endif
+                                @if((int) $profitSummary['refunded_minor'] > 0)
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted">Recorded Refunds</span>
+                                        <span class="fw-semibold text-danger" id="profitRefunded">-{{ $profitSummary['formatted']['refunded'] }}</span>
+                                    </div>
+                                @endif
+                                @if((int) $profitSummary['tax_minor'] > 0)
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="text-muted">Authority Tax (Excluded)</span>
+                                        <span class="text-muted" id="profitTaxExcluded">{{ $profitSummary['formatted']['tax'] }}</span>
+                                    </div>
+                                @endif
+                                <div class="d-flex justify-content-between align-items-center pt-2 border-top mb-2">
+                                    <span class="fw-semibold text-dark">Other Contribution</span>
+                                    <strong class="{{ (int) $profitSummary['other_contribution_minor'] >= 0 ? 'text-success' : 'text-danger' }}" id="profitOtherContribution">{{ $profitSummary['formatted']['other_contribution'] }}</strong>
+                                </div>
+                                <div class="p-2 rounded-2" style="background-color: #F8FAFC; border: 1px dashed #CBD5E1; font-size: 0.72rem;">
+                                    <div class="d-flex justify-content-between text-muted">
+                                        <span>Customer Tips (Pass-Through):</span>
+                                        <span class="fw-semibold text-dark" id="profitCustomerTip">{{ $profitSummary['formatted']['customer_tip'] }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between text-muted">
+                                        <span>Allocated to Couriers (50/50):</span>
+                                        <span class="fw-semibold text-dark" id="profitAllocatedTips">{{ $profitSummary['formatted']['allocated_tips'] }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between fw-semibold text-dark">
+                                        <span>Tip Net Profit Contribution:</span>
+                                        <span>{{ $currencyService->formatMinor(0, $profitSummary['currency']) }}</span>
+                                    </div>
+                                    @if($profitSummary['has_tip_reconciliation_issue'])
+                                        <div class="text-danger fw-semibold mt-1">
+                                            <i class="mdi mdi-alert-outline me-1"></i>Tip allocation mismatch flagged for reconciliation.
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Highlight Bar: Total Booking Profit & Contribution Margin % -->
+                    <div class="row g-2 g-md-3">
+                        <div class="col-12 col-md-7">
+                            <div id="profitTotalBox" class="rounded-3 p-3 d-flex justify-content-between align-items-center"
+                                 style="background-color: {{ $psIsPositive ? '#ECFDF5' : '#FFF1F2' }}; border: 1px solid {{ $psIsPositive ? '#A7F3D0' : '#FECACA' }};">
+                                <div>
+                                    <div class="fw-bold text-uppercase" style="font-size: 0.74rem; color: {{ $psIsPositive ? '#16A34A' : '#EF4444' }}; letter-spacing: 0.04em;">
+                                        Total Booking Profit {{ $profitSummary['is_provisional'] ? '(Provisional)' : '' }}
+                                    </div>
+                                    <div class="small text-muted" style="font-size: 0.74rem;">Store + Delivery + Platform Fees &minus; Discounts/Refunds</div>
+                                </div>
+                                <div id="profitTotalValue" class="fs-4 fw-bold" style="color: {{ $psIsPositive ? '#16A34A' : '#EF4444' }};">
+                                    {{ $profitSummary['formatted']['total_profit'] }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-5">
+                            <div class="bg-white rounded-3 p-3 d-flex justify-content-between align-items-center border h-100" style="border-color: #DDD6FE !important;">
+                                <div>
+                                    <div class="fw-bold text-uppercase" style="font-size: 0.74rem; color: #6D28D9; letter-spacing: 0.04em;">Contribution Margin %</div>
+                                    <div class="small text-muted" style="font-size: 0.74rem;">
+                                        Recognized Net Revenue: <strong class="text-dark" id="profitRecognizedRevenue">{{ $profitSummary['formatted']['recognized_net_revenue'] }}</strong>
+                                    </div>
+                                </div>
+                                <div id="profitMarginPctValue" class="fs-4 fw-bold text-dark">
+                                    {{ $profitSummary['margin_percentage_formatted'] }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <!-- Collection & Payment Verification -->
+    <div class="bk-card p-3 p-md-4 mb-3" id="collectionVerificationSection">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h6 class="fw-bold mb-0" style="color: #171717;">
+                <i class="mdi mdi-shield-check-outline text-primary me-1"></i>Collection &amp; Payment Verification
+            </h6>
+            @can('view-delivery-settlements', 'admin')
+                <a href="{{ route('admin.delivery-person-settlements.index') }}" class="btn btn-xs btn-outline-primary">Daily Cash Settlements</a>
+            @endcan
+        </div>
+        <div class="row g-2 small">
+            <div class="col-6 col-md-3">
+                <div class="p-2 rounded-3 bg-light border">
+                    <div class="text-muted" style="font-size: 0.72rem;">Collection Delivery Person</div>
+                    <div class="fw-semibold text-dark">{{ $collectionAssignment?->deliveryPerson?->full_name ?? 'Unassigned' }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="p-2 rounded-3 bg-light border">
+                    <div class="text-muted" style="font-size: 0.72rem;">Collection OTP Status</div>
+                    @if($booking->collection_otp_verified_at)
+                        <div class="fw-semibold text-success">Verified ({{ $booking->collection_otp_verified_at->format('d M Y, H:i') }})</div>
+                    @else
+                        <div class="fw-semibold text-warning-emphasis">Pending Verification</div>
+                    @endif
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="p-2 rounded-3 bg-light border">
+                    <div class="text-muted" style="font-size: 0.72rem;">Customer Payment Channel</div>
+                    <div class="fw-semibold text-dark">{{ ucfirst(str_replace('_', ' ', (string) ($booking->customer_payment_channel ?: $booking->payment_gateway ?: 'Pending'))) }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="p-2 rounded-3 bg-light border">
+                    <div class="text-muted" style="font-size: 0.72rem;">Cash Collected by Delivery Person</div>
+                    <div class="fw-semibold text-dark">{{ $currencyService->formatMinor((int) $booking->cash_collected_minor, $booking->currency) }}</div>
+                </div>
+            </div>
+        </div>
+        @if($booking->currentStoreHandover)
+            @php $admHandover = $booking->currentStoreHandover; @endphp
+            <div class="mt-2 p-2 px-3 rounded-3 bg-light border small d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                    <strong>Store Handover ({{ $admHandover->request_reference }}):</strong>
+                    @if($admHandover->status === 'accepted')
+                        <span class="text-success fw-semibold">Accepted by {{ $admHandover->acceptedByStoreUser?->name ?? 'Store Staff' }} at {{ $admHandover->accepted_at?->format('d M Y, H:i') }}</span>
+                    @elseif($admHandover->status === 'pending')
+                        <span class="text-warning-emphasis fw-semibold">Pending Store Acceptance (Requested {{ $admHandover->requested_at?->format('d M Y, H:i') }})</span>
+                    @elseif($admHandover->status === 'rejected')
+                        <span class="text-danger fw-semibold">Issue Reported: {{ $admHandover->rejection_reason }}</span>
+                    @else
+                        <span class="text-muted">{{ ucfirst($admHandover->status) }}</span>
+                    @endif
+                </div>
+            </div>
+        @endif
     </div>
 
     <!-- Store & Delivery Assignments (Full-Width Compact Section) -->
@@ -1329,6 +1608,25 @@
                             <div style="font-size: 0.78rem; color: #475569;">
                                 Assigned: <span id="cardCollectionAssignedAt" class="fw-semibold" style="color: #171717;">{{ $collectionAssignment?->assigned_at?->format('d M Y, H:i') ?? '-' }}</span>
                             </div>
+                            @php
+                                $colRateMinor = (int) ($collectionAssignment?->rate_minor ?? ($financialAllocation['default_collection_payment_minor'] ?? 0));
+                                $colTipMinor = (int) ($collectionAssignment?->tip_share_minor ?? ($financialAllocation['collection_tip_share_minor'] ?? 0));
+                                $colTotalMinor = $colRateMinor + $colTipMinor;
+                            @endphp
+                            <div class="mt-2 pt-2 border-top" style="border-color: rgba(14, 116, 144, 0.15) !important; font-size: 0.78rem;">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Delivery Payment:</span>
+                                    <strong id="cardCollectionPay" class="text-dark">{{ $currencyService->formatMinor($colRateMinor, $booking->currency) }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Tip Share (50%):</span>
+                                    <strong id="cardCollectionTip" class="text-dark">{{ $currencyService->formatMinor($colTipMinor, $booking->currency) }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1">
+                                    <span class="fw-semibold text-dark">Total Expected:</span>
+                                    <strong id="cardCollectionTotal" class="text-primary">{{ $currencyService->formatMinor($colTotalMinor, $booking->currency) }}</strong>
+                                </div>
+                            </div>
                         </div>
 
                         <div id="cardCollectionEmpty" class="{{ $collectionAssignment ? 'd-none' : '' }} small py-2" style="color: #475569;">
@@ -1393,6 +1691,25 @@
                             </div>
                             <div style="font-size: 0.78rem; color: #475569;">
                                 Assigned: <span id="cardFinalAssignedAt" class="fw-semibold" style="color: #171717;">{{ $finalDeliveryAssignment?->assigned_at?->format('d M Y, H:i') ?? '-' }}</span>
+                            </div>
+                            @php
+                                $finRateMinor = (int) ($finalDeliveryAssignment?->rate_minor ?? ($financialAllocation['default_final_payment_minor'] ?? 0));
+                                $finTipMinor = (int) ($finalDeliveryAssignment?->tip_share_minor ?? ($financialAllocation['final_tip_share_minor'] ?? 0));
+                                $finTotalMinor = $finRateMinor + $finTipMinor;
+                            @endphp
+                            <div class="mt-2 pt-2 border-top" style="border-color: rgba(14, 116, 144, 0.15) !important; font-size: 0.78rem;">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Delivery Payment:</span>
+                                    <strong id="cardFinalPay" class="text-dark">{{ $currencyService->formatMinor($finRateMinor, $booking->currency) }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Tip Share (50%):</span>
+                                    <strong id="cardFinalTip" class="text-dark">{{ $currencyService->formatMinor($finTipMinor, $booking->currency) }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1">
+                                    <span class="fw-semibold text-dark">Total Expected:</span>
+                                    <strong id="cardFinalTotal" class="text-success">{{ $currencyService->formatMinor($finTotalMinor, $booking->currency) }}</strong>
+                                </div>
                             </div>
                         </div>
 
@@ -1640,6 +1957,62 @@
                                   class="form-control"
                                   style="border-radius: 10px;"
                                   placeholder="Explain why this delivery person is being assigned outside covered postcodes or reassigned."></textarea>
+                    </div>
+
+                    <div class="mt-3 p-3 rounded-3 small" style="background-color: #F8FAFC; border: 1px solid #E2E8F0;">
+                        <div class="fw-bold text-dark mb-2">
+                            <i class="mdi mdi-cash-multiple text-primary me-1"></i>Delivery Payment &amp; Tip Allocation
+                        </div>
+                        <div class="d-flex justify-content-between text-muted mb-1">
+                            <span>Booking Collection &amp; Delivery Fee</span>
+                            <strong class="text-dark" id="modalBookingDeliveryFee">{{ $currencyService->formatMinor((int) ($financialAllocation['delivery_fee_minor'] ?? 0), $booking->currency) }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted mb-1">
+                            <span>Customer Tip (Total)</span>
+                            <strong class="text-dark" id="modalBookingCustomerTip">{{ $currencyService->formatMinor((int) ($financialAllocation['customer_tip_minor'] ?? 0), $booking->currency) }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted mb-2">
+                            <span>Default Delivery Payment (50%)</span>
+                            <strong class="text-dark" id="modalDefaultLegPayment">-</strong>
+                        </div>
+
+                        <div class="mb-2">
+                            <label for="assignCourierDeliveryPayment" class="form-label small fw-semibold text-dark mb-1">
+                                Delivery Payment ({{ $booking->currency ?: $currencyService->code() }})
+                            </label>
+                            <input type="number"
+                                   step="0.01"
+                                   min="0"
+                                   id="assignCourierDeliveryPayment"
+                                   name="delivery_payment"
+                                   class="form-control form-control-sm"
+                                   style="border-radius: 8px;"
+                                   placeholder="0.00">
+                            <div class="form-text" style="font-size: 0.72rem;">Defaults to 50% of the booking delivery fee. You may adjust manually.</div>
+                        </div>
+
+                        <div class="d-flex justify-content-between text-muted mb-1">
+                            <span>Tip Share (50%)</span>
+                            <strong class="text-dark" id="modalCourierTipShare">-</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 pb-2 border-bottom">
+                            <span class="fw-semibold text-dark">Total Expected Earnings</span>
+                            <strong class="text-primary" id="modalCourierTotalEarnings">-</strong>
+                        </div>
+
+                        <div id="modalAllocationPreviewBox" class="rounded-2 p-2" style="background-color: #ECFDF5; border: 1px solid #A7F3D0;">
+                            <div class="d-flex justify-content-between text-muted mb-1" style="font-size: 0.76rem;">
+                                <span>Combined Delivery Payout (Collection + Final)</span>
+                                <strong class="text-dark" id="modalCombinedPayout">-</strong>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center" style="font-size: 0.78rem;">
+                                <span class="fw-semibold" id="modalAdminMarginLabel">Admin Delivery Margin</span>
+                                <strong id="modalAdminMarginValue" class="text-success">-</strong>
+                            </div>
+                            <div id="modalShortfallWarning" class="text-danger fw-semibold mt-1 d-none" style="font-size: 0.74rem;">
+                                <i class="mdi mdi-alert-circle-outline me-1"></i>Combined delivery payments exceed customer delivery fee; Admin Account will absorb the shortfall on completion.
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer bg-white border-top py-2 px-3 flex-shrink-0">
@@ -1916,6 +2289,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (res.can_complete_store_stage) {
                     $('#btnMarkStageDone').prop('disabled', false).removeAttr('title');
                 }
+                if (res.profit_summary && typeof refreshProfitSummaryCard === 'function') {
+                    refreshProfitSummaryCard(res.profit_summary);
+                }
 
                 const modal = getAssignModal();
                 if (modal) modal.hide();
@@ -1944,8 +2320,95 @@ document.addEventListener('DOMContentLoaded', function () {
     const customerPostcode = @json($customerPostcode ?? '');
     let currentCollectionCourierId = @json($collectionAssignment?->delivery_person_id);
     let currentFinalCourierId = @json($finalDeliveryAssignment?->delivery_person_id);
+    const deliveryFeeMinor = @json((int) ($financialAllocation['delivery_fee_minor'] ?? 0));
+    const defaultColPaymentMinor = @json((int) ($financialAllocation['default_collection_payment_minor'] ?? 0));
+    const defaultFinPaymentMinor = @json((int) ($financialAllocation['default_final_payment_minor'] ?? 0));
+    const colTipShareMinor = @json((int) ($financialAllocation['collection_tip_share_minor'] ?? 0));
+    const finTipShareMinor = @json((int) ($financialAllocation['final_tip_share_minor'] ?? 0));
+    let savedColPaymentMinor = @json($collectionAssignment ? (int) $collectionAssignment->rate_minor : null);
+    let savedFinPaymentMinor = @json($finalDeliveryAssignment ? (int) $finalDeliveryAssignment->rate_minor : null);
+    const bookingCurrencySymbol = @json($currencyService->symbol($booking->currency));
     const $courierSelect = $('#assignCourierSelect');
     const courierModalEl = document.getElementById('assignCourierModal');
+
+    function formatMinorClient(minor) {
+        const sign = minor < 0 ? '-' : '';
+        const abs = Math.abs(Math.round(minor));
+        return sign + bookingCurrencySymbol + (abs / 100).toFixed(2);
+    }
+
+    function refreshProfitSummaryCard(p) {
+        if (!p || !$('#bookingProfitSummaryCard').length) return;
+        const canShow = !!(p.is_finalized || p.has_provisional_estimate);
+        $('#profitSummaryStatusBadge')
+            .text(p.status_label || '')
+            .removeClass('bg-success-subtle text-success bg-primary-subtle text-primary bg-warning-subtle text-warning bg-secondary-subtle text-secondary')
+            .addClass('bg-' + (p.status_badge || 'warning') + '-subtle text-' + (p.status_badge || 'warning'));
+        $('#profitNotFinalizedNotice').toggleClass('d-none', canShow);
+        $('#profitBreakdownContent').toggleClass('d-none', !canShow);
+        if (!canShow || !p.formatted) return;
+
+        $('#profitEligibleService').text(p.formatted.eligible_service_revenue);
+        $('#profitStoreNet').text('-' + p.formatted.store_net_earnings);
+        $('#profitStoreContribution').text(p.formatted.store_contribution)
+            .toggleClass('text-success', p.store_contribution_minor >= 0)
+            .toggleClass('text-danger', p.store_contribution_minor < 0);
+        $('#profitDeliveryCharge').text(p.formatted.delivery_fee);
+        $('#profitCollectionPay').text('-' + p.formatted.collection_payment);
+        $('#profitFinalPay').text('-' + p.formatted.final_payment);
+        $('#profitDeliveryLabel').text(p.delivery_contribution_minor < 0 ? 'Delivery Loss' : 'Delivery Profit');
+        $('#profitDeliveryContribution').text(p.formatted.delivery_contribution)
+            .toggleClass('text-success', p.delivery_contribution_minor >= 0)
+            .toggleClass('text-danger', p.delivery_contribution_minor < 0);
+        $('#profitServiceFee').text(p.formatted.service_fee);
+        $('#profitOtherContribution').text(p.formatted.other_contribution)
+            .toggleClass('text-success', p.other_contribution_minor >= 0)
+            .toggleClass('text-danger', p.other_contribution_minor < 0);
+        $('#profitCustomerTip').text(p.formatted.customer_tip);
+        $('#profitAllocatedTips').text(p.formatted.allocated_tips);
+        $('#profitRecognizedRevenue').text(p.formatted.recognized_net_revenue);
+        $('#profitMarginPctValue').text(p.margin_percentage_formatted || 'N/A');
+
+        const isPos = (p.total_profit_minor || 0) >= 0;
+        $('#profitTotalBox').css({
+            'background-color': isPos ? '#ECFDF5' : '#FFF1F2',
+            'border-color': isPos ? '#A7F3D0' : '#FECACA'
+        });
+        $('#profitTotalValue').text(p.formatted.total_profit).css('color', isPos ? '#16A34A' : '#EF4444');
+    }
+
+    function updateCourierPaymentPreview() {
+        const type = $('#assignCourierTypeInput').val();
+        const isFinal = type === @json(\Modules\Admin\Models\DeliveryAssignment::TYPE_FINAL_DELIVERY);
+        const rawVal = parseFloat($('#assignCourierDeliveryPayment').val());
+        const enteredMinor = isNaN(rawVal) || rawVal < 0 ? 0 : Math.round(rawVal * 100);
+        const legTipMinor = isFinal ? finTipShareMinor : colTipShareMinor;
+        const otherLegMinor = isFinal
+            ? (savedColPaymentMinor !== null ? savedColPaymentMinor : defaultColPaymentMinor)
+            : (savedFinPaymentMinor !== null ? savedFinPaymentMinor : defaultFinPaymentMinor);
+        const combinedPayoutMinor = enteredMinor + otherLegMinor;
+        const marginMinor = deliveryFeeMinor - combinedPayoutMinor;
+
+        $('#modalCourierTipShare').text(formatMinorClient(legTipMinor));
+        $('#modalCourierTotalEarnings').text(formatMinorClient(enteredMinor + legTipMinor));
+        $('#modalCombinedPayout').text(formatMinorClient(combinedPayoutMinor));
+        $('#modalAdminMarginValue').text(formatMinorClient(marginMinor));
+
+        const $box = $('#modalAllocationPreviewBox');
+        if (marginMinor < 0) {
+            $box.css({ 'background-color': '#FEF2F2', 'border-color': '#FECACA' });
+            $('#modalAdminMarginLabel').text('Admin Delivery Shortfall').removeClass('text-dark').addClass('text-danger');
+            $('#modalAdminMarginValue').removeClass('text-success').addClass('text-danger');
+            $('#modalShortfallWarning').removeClass('d-none');
+        } else {
+            $box.css({ 'background-color': '#ECFDF5', 'border-color': '#A7F3D0' });
+            $('#modalAdminMarginLabel').text('Admin Delivery Margin').removeClass('text-danger').addClass('text-dark');
+            $('#modalAdminMarginValue').removeClass('text-danger').addClass('text-success');
+            $('#modalShortfallWarning').addClass('d-none');
+        }
+    }
+
+    $('#assignCourierDeliveryPayment').on('input change', updateCourierPaymentPreview);
 
     function getCourierModal() {
         if (!courierModalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) return null;
@@ -2069,6 +2532,14 @@ document.addEventListener('DOMContentLoaded', function () {
             $courierSelect.val(null).trigger('change');
         }
 
+        const defaultLegMinor = isFinal ? defaultFinPaymentMinor : defaultColPaymentMinor;
+        const currentLegMinor = isFinal
+            ? (savedFinPaymentMinor !== null ? savedFinPaymentMinor : defaultLegMinor)
+            : (savedColPaymentMinor !== null ? savedColPaymentMinor : defaultLegMinor);
+        $('#modalDefaultLegPayment').text(formatMinorClient(defaultLegMinor));
+        $('#assignCourierDeliveryPayment').val((currentLegMinor / 100).toFixed(2));
+        updateCourierPaymentPreview();
+
         const modal = getCourierModal();
         if (modal) modal.show();
     });
@@ -2092,6 +2563,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (isFinal) {
                     currentFinalCourierId = res.delivery_person_id;
+                    if (typeof res.rate_minor === 'number') {
+                        savedFinPaymentMinor = res.rate_minor;
+                    }
                     $('#inlineFinalCourierName').text(res.courier_name);
                     $('#inlineFinalCourierPhone').text(res.courier_phone || 'Not provided');
                     $('#inlineFinalCourierStatus').text(res.status_label || 'Assigned');
@@ -2104,6 +2578,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     $('#cardFinalPhone').text(res.courier_phone || 'Not provided');
                     $('#cardFinalStatus').text(res.status_label || 'Assigned');
                     $('#cardFinalAssignedAt').text(res.assigned_at || 'Just now');
+                    if (res.delivery_payment_formatted) $('#cardFinalPay').text(res.delivery_payment_formatted);
+                    if (res.tip_share_formatted) $('#cardFinalTip').text(res.tip_share_formatted);
+                    if (res.total_earnings_formatted) $('#cardFinalTotal').text(res.total_earnings_formatted);
                     $('#cardFinalBadge')
                         .text(badgeText)
                         .removeClass('bg-secondary-subtle text-secondary bg-success-subtle text-success bg-warning-subtle text-warning-emphasis')
@@ -2113,6 +2590,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     $('#btnCardAssignFinal').text('Change Delivery Person');
                 } else {
                     currentCollectionCourierId = res.delivery_person_id;
+                    if (typeof res.rate_minor === 'number') {
+                        savedColPaymentMinor = res.rate_minor;
+                    }
                     $('#inlineCollectionCourierName').text(res.courier_name);
                     $('#inlineCollectionCourierPhone').text(res.courier_phone || 'Not provided');
                     $('#inlineCollectionCourierStatus').text(res.status_label || 'Assigned');
@@ -2125,6 +2605,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     $('#cardCollectionPhone').text(res.courier_phone || 'Not provided');
                     $('#cardCollectionStatus').text(res.status_label || 'Assigned');
                     $('#cardCollectionAssignedAt').text(res.assigned_at || 'Just now');
+                    if (res.delivery_payment_formatted) $('#cardCollectionPay').text(res.delivery_payment_formatted);
+                    if (res.tip_share_formatted) $('#cardCollectionTip').text(res.tip_share_formatted);
+                    if (res.total_earnings_formatted) $('#cardCollectionTotal').text(res.total_earnings_formatted);
                     $('#cardCollectionBadge')
                         .text(badgeText)
                         .removeClass('bg-secondary-subtle text-secondary bg-success-subtle text-success bg-warning-subtle text-warning-emphasis')
@@ -2132,6 +2615,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     $('#cardCollectionDetails').removeClass('d-none');
                     $('#cardCollectionEmpty').addClass('d-none');
                     $('#btnCardAssignCollection').text('Change Delivery Person');
+                }
+
+                if (res.financial_preview) {
+                    $('#summaryColPayment').text(formatMinorClient(res.financial_preview.collection_payment_minor || 0));
+                    $('#summaryFinPayment').text(formatMinorClient(res.financial_preview.final_payment_minor || 0));
+                    const m = res.financial_preview.admin_delivery_margin_minor || 0;
+                    const $marginEl = $('#summaryAdminMargin');
+                    $marginEl.toggleClass('text-danger', m < 0).toggleClass('text-success', m >= 0);
+                    $marginEl.html((m < 0 ? '-' : '') + formatMinorClient(Math.abs(m)) + (m < 0 ? ' <span class="badge bg-danger-subtle text-danger ms-1" style="font-size: 0.65rem;">Shortfall</span>' : ''));
+                }
+                if (res.profit_summary && typeof refreshProfitSummaryCard === 'function') {
+                    refreshProfitSummaryCard(res.profit_summary);
                 }
 
                 if (res.can_complete_stage) {

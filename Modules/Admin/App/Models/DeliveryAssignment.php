@@ -70,6 +70,8 @@ class DeliveryAssignment extends Model
         'failed_at',
         'cancelled_at',
         'rate_minor',
+        'tip_share_minor',
+        'is_manual_rate_override',
         'currency',
         'rate_override_reason',
         'earnings_status',
@@ -97,6 +99,8 @@ class DeliveryAssignment extends Model
         'cod_collected_at' => 'datetime',
         'cod_handed_over_at' => 'datetime',
         'rate_minor' => 'integer',
+        'tip_share_minor' => 'integer',
+        'is_manual_rate_override' => 'boolean',
         'cod_expected_minor' => 'integer',
         'cod_collected_minor' => 'integer',
     ];

@@ -40,38 +40,136 @@ class CustomerBookingController extends Controller
         ]);
     }
 
-    public function index(Request $request): View
+    public function index(Request $request, CurrencyService $currencyService): View|RedirectResponse
     {
-        $verifiedRefs = session('verified_order_references', []);
-        if (! is_array($verifiedRefs)) {
-            $verifiedRefs = [];
+        $user = $request->user();
+        if (! $user) {
+            return redirect()->guest(route('login'));
         }
 
-        if ($lastRef = session('last_confirmed_booking_reference')) {
-            $verifiedRefs[] = $lastRef;
-        }
-        $verifiedRefs = array_values(array_unique(array_filter($verifiedRefs)));
+        Booking::associateVerifiedUserBookings($user);
 
-        $bookings = Booking::query()
-            ->whereNotNull('confirmed_at')
-            ->where(function ($query) use ($request, $verifiedRefs) {
-                if ($request->user()) {
-                    $query->where('user_id', $request->user()->id);
-                    if ($verifiedRefs !== []) {
-                        $query->orWhereIn('reference', $verifiedRefs);
-                    }
-                } elseif ($verifiedRefs !== []) {
-                    $query->whereIn('reference', $verifiedRefs);
-                } else {
-                    $query->whereRaw('1 = 0');
-                }
-            })
-            ->orderByDesc('confirmed_at')
+        $validated = $request->validate([
+            'from_date' => ['nullable', 'date'],
+            'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
+            'preset' => ['nullable', 'string', 'in:all,today,last_7_days,last_30_days,this_month'],
+            'status' => ['nullable', 'string', 'in:all,pending,in_progress,completed,cancelled'],
+            'q' => ['nullable', 'string', 'max:60'],
+        ]);
+
+        $tz = (string) config('app.timezone', 'UTC');
+        $preset = (string) ($validated['preset'] ?? 'all');
+        $fromDate = $validated['from_date'] ?? null;
+        $toDate = $validated['to_date'] ?? null;
+
+        if ($preset !== 'all' && ! $fromDate && ! $toDate) {
+            $now = now($tz);
+            match ($preset) {
+                'today' => [$fromDate, $toDate] = [$now->toDateString(), $now->toDateString()],
+                'last_7_days' => [$fromDate, $toDate] = [$now->copy()->subDays(6)->toDateString(), $now->toDateString()],
+                'last_30_days' => [$fromDate, $toDate] = [$now->copy()->subDays(29)->toDateString(), $now->toDateString()],
+                'this_month' => [$fromDate, $toDate] = [$now->copy()->startOfMonth()->toDateString(), $now->toDateString()],
+                default => null,
+            };
+        }
+
+        $statusFilter = (string) ($validated['status'] ?? 'all');
+        $search = trim((string) ($validated['q'] ?? ''));
+
+        $baseQuery = Booking::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('confirmed_at');
+
+        // Global all-time customer statistics using single shared grouping logic
+        $allCustomerBookings = (clone $baseQuery)
+            ->select(['id', 'booking_status', 'completed_operational_stages'])
+            ->get();
+
+        $stats = [
+            'total' => $allCustomerBookings->count(),
+            'pending' => 0,
+            'in_progress' => 0,
+            'completed' => 0,
+            'cancelled' => 0,
+        ];
+        foreach ($allCustomerBookings as $row) {
+            $group = $row->getCustomerStatusGroup();
+            $stats[$group] = ($stats[$group] ?? 0) + 1;
+        }
+
+        $filteredQuery = (clone $baseQuery)
+            ->with([
+                'assignedStore:id,name',
+                'currentStoreAssignment:id,booking_id,store_name_snapshot',
+                'currentInvoice:id,booking_id,invoice_number',
+                'operationalItems',
+            ]);
+
+        if ($fromDate) {
+            $filteredQuery->where('created_at', '>=', \Carbon\Carbon::parse($fromDate, $tz)->startOfDay()->utc());
+        }
+        if ($toDate) {
+            $filteredQuery->where('created_at', '<=', \Carbon\Carbon::parse($toDate, $tz)->endOfDay()->utc());
+        }
+
+        if ($statusFilter !== 'all') {
+            match ($statusFilter) {
+                Booking::CUSTOMER_STATUS_CANCELLED => $filteredQuery->where('booking_status', Booking::STATUS_CANCELLED),
+                Booking::CUSTOMER_STATUS_COMPLETED => $filteredQuery->where(function ($q) {
+                    $q->whereIn('booking_status', [Booking::STATUS_COMPLETED, Booking::STATUS_DELIVERED])
+                        ->orWhere('completed_operational_stages', 'like', '%"' . Booking::STATUS_COMPLETED . '"%');
+                }),
+                Booking::CUSTOMER_STATUS_PENDING => $filteredQuery
+                    ->whereIn('booking_status', Booking::CUSTOMER_PENDING_BOOKING_STATUSES)
+                    ->where(function ($q) {
+                        $q->whereNull('completed_operational_stages')
+                            ->orWhere('completed_operational_stages', 'not like', '%"' . Booking::STATUS_PROCESSING . '"%');
+                    }),
+                Booking::CUSTOMER_STATUS_IN_PROGRESS => $filteredQuery
+                    ->whereNotIn('booking_status', [Booking::STATUS_CANCELLED, Booking::STATUS_COMPLETED, Booking::STATUS_DELIVERED])
+                    ->where(function ($q) {
+                        $q->whereNull('completed_operational_stages')
+                            ->orWhere('completed_operational_stages', 'not like', '%"' . Booking::STATUS_COMPLETED . '"%');
+                    })
+                    ->where(function ($q) {
+                        $q->whereNotIn('booking_status', Booking::CUSTOMER_PENDING_BOOKING_STATUSES)
+                            ->orWhere('completed_operational_stages', 'like', '%"' . Booking::STATUS_PROCESSING . '"%');
+                    }),
+                default => null,
+            };
+        }
+
+        if ($search !== '') {
+            $filteredQuery->where(function ($q) use ($search) {
+                $q->where('reference', 'like', "%{$search}%")
+                    ->orWhereHas('currentInvoice', fn ($iq) => $iq->where('invoice_number', 'like', "%{$search}%"));
+            });
+        }
+
+        $bookings = $filteredQuery
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->paginate(12);
+            ->paginate(10)
+            ->withQueryString();
+
+        $hasActiveFilters = $fromDate !== null
+            || $toDate !== null
+            || $statusFilter !== 'all'
+            || $search !== ''
+            || $preset !== 'all';
 
         return view('orders.index', [
             'bookings' => $bookings,
+            'stats' => $stats,
+            'currencyService' => $currencyService,
+            'filters' => [
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+                'preset' => $preset,
+                'status' => $statusFilter,
+                'q' => $search,
+            ],
+            'hasActiveFilters' => $hasActiveFilters,
         ]);
     }
 

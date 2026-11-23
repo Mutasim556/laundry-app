@@ -3,6 +3,7 @@
 namespace Modules\Admin\App\Services;
 
 use App\Models\Booking;
+use App\Services\BookingFinancialSettlementService;
 use App\Services\CurrencyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -226,22 +227,28 @@ class DeliveryLogisticsService
         $storeAddress = $this->formatStoreAddress($store);
         $storePostcode = $store?->postcode;
 
+        $defaultDeliverySplit = BookingFinancialSettlementService::splitMinorHalf((int) ($booking->collection_delivery_fee_minor ?? 0));
+        $tipSplit = BookingFinancialSettlementService::splitMinorHalf((int) ($booking->tip_amount_minor ?? 0));
+
         if ($type === DeliveryAssignment::TYPE_CUSTOMER_COLLECTION) {
             $pickupLocation = $customerInfo['address'];
             $pickupPostcode = $customerInfo['postcode'];
             $destinationLocation = $storeAddress;
             $destinationPostcode = $storePostcode;
-            $defaultRateMinor = (int) $person->per_collection_rate_minor;
+            $defaultRateMinor = $defaultDeliverySplit['collection'];
+            $tipShareMinor = $tipSplit['collection'];
         } else {
             $pickupLocation = $storeAddress;
             $pickupPostcode = $storePostcode;
             $destinationLocation = $customerInfo['address'];
             $destinationPostcode = $customerInfo['postcode'];
-            $defaultRateMinor = (int) $person->per_delivery_rate_minor;
+            $defaultRateMinor = $defaultDeliverySplit['final'];
+            $tipShareMinor = $tipSplit['final'];
         }
 
         $rateMinor = $overrideRateMinor !== null ? max(0, $overrideRateMinor) : $defaultRateMinor;
-        $currency = $person->currency ?: $this->currencyService->code();
+        $isManualRateOverride = $overrideRateMinor !== null && $rateMinor !== $defaultRateMinor;
+        $currency = strtoupper((string) ($booking->currency ?: $this->currencyService->code()));
 
         $codExpectedMinor = ($type === DeliveryAssignment::TYPE_FINAL_DELIVERY && strtolower((string) $booking->payment_gateway) === 'cod' && $booking->payment_status !== 'paid')
             ? (int) ($booking->final_amount_minor ?: $booking->estimated_amount_minor ?: 0)
@@ -259,6 +266,8 @@ class DeliveryLogisticsService
             $matchedPostcode,
             $coverageOverrideReason,
             $rateMinor,
+            $tipShareMinor,
+            $isManualRateOverride,
             $currency,
             $overrideReason,
             $codExpectedMinor,
@@ -279,6 +288,8 @@ class DeliveryLogisticsService
                 'coverage_override_reason' => $coverageOverrideReason ? trim($coverageOverrideReason) : null,
                 'assigned_at' => now(),
                 'rate_minor' => $rateMinor,
+                'tip_share_minor' => $tipShareMinor,
+                'is_manual_rate_override' => $isManualRateOverride,
                 'currency' => $currency,
                 'rate_override_reason' => $overrideReason ? trim($overrideReason) : null,
                 'earnings_status' => 'pending',

@@ -286,7 +286,7 @@ class StoreController extends Controller
             'description' => 'nullable|string',
             'verification_notes' => 'nullable|string',
             'commission_type' => 'nullable|string|max:50',
-            'commission_rate' => 'nullable|numeric|min:0',
+            'commission_rate' => 'nullable|numeric|min:0|max:100',
             'logo' => 'nullable|image|max:2048',
             'cover_image' => 'nullable|image|max:3072',
         ]);
@@ -413,7 +413,7 @@ class StoreController extends Controller
             'description' => 'nullable|string',
             'verification_notes' => 'nullable|string',
             'commission_type' => 'nullable|string|max:50',
-            'commission_rate' => 'nullable|numeric|min:0',
+            'commission_rate' => 'nullable|numeric|min:0|max:100',
             'logo' => 'nullable|image|max:2048',
             'cover_image' => 'nullable|image|max:3072',
             'remove_logo' => 'nullable|boolean',

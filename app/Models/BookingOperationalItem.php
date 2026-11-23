@@ -28,6 +28,8 @@ class BookingOperationalItem extends Model
         'actual_unit_price_minor',
         'line_total_minor',
         'is_price_overridden',
+        'origin_type',
+        'origin_actor_id',
         'adjustment_reason',
         'adjusted_by_admin_id',
         'adjusted_at',

@@ -231,6 +231,93 @@
         </div>
     </div>
 </div>
+
+<!-- Store Portal Access & Users Modal -->
+<div class="modal fade saas-modal store-management__modal" id="storePortalUsersModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-bottom bg-white py-2 px-3">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="saas-section-badge"><i class="mdi mdi-account-key"></i></span>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0">Store Portal Access</h5>
+                        <small class="text-muted" id="portalUsersStoreName"></small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3 p-md-4" style="background: #f6f8fc;">
+                <div id="portalUsersErrors" class="alert alert-danger small d-none mb-3"></div>
+
+                <div class="card border-0 shadow-sm rounded-3 mb-3">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold mb-2">Linked Store Portal Users</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light small">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="portalUsersTableBody" class="small"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-3">
+                    <div class="card-body p-3">
+                        <h6 class="fw-bold mb-2">Create Store User</h6>
+                        <form id="createStoreUserForm" class="row g-2 small">
+                            @csrf
+                            <input type="hidden" id="portalUsersStoreId">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-semibold mb-1">Name *</label>
+                                <input type="text" name="name" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-semibold mb-1">Email *</label>
+                                <input type="email" name="email" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-semibold mb-1">Role *</label>
+                                <select name="role" class="form-select form-select-sm" required>
+                                    <option value="owner">Owner</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="staff">Staff</option>
+                                </select>
+                            </div>
+                            <div class="col-4 col-md-2">
+                                <label class="form-label fw-semibold mb-1">Code</label>
+                                <input type="text" name="phone_country_code" class="form-control form-control-sm" placeholder="+44">
+                            </div>
+                            <div class="col-8 col-md-4">
+                                <label class="form-label fw-semibold mb-1">Phone</label>
+                                <input type="text" name="phone" class="form-control form-control-sm" placeholder="7700900111">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label fw-semibold mb-1">Password *</label>
+                                <input type="password" name="password" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label fw-semibold mb-1">Confirm *</label>
+                                <input type="password" name="password_confirmation" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-12 d-flex justify-content-end mt-2">
+                                <button type="submit" class="btn btn-sm btn-warning fw-bold px-3">Create Store User</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -539,6 +626,12 @@
                                     <button type="button" class="saas-action-btn view view-store-btn" data-id="${row.id}" title="View Details">
                                         <i class="mdi mdi-eye font-16"></i>
                                     </button>
+                                    <button type="button" class="saas-action-btn view portal-users-btn" data-id="${row.id}" data-name="${escapeHtml(row.name)}" title="Store Portal Access">
+                                        <i class="mdi mdi-account-key font-16"></i>
+                                    </button>
+                                    <a href="{{ url('admin/stores') }}/${row.id}/account" class="saas-action-btn view" title="View Account">
+                                        <i class="mdi mdi-wallet font-16"></i>
+                                    </a>
                                     <button type="button" class="saas-action-btn edit edit-store-btn" data-id="${row.id}" title="Edit Store">
                                         <i class="mdi mdi-pencil font-16"></i>
                                     </button>
@@ -863,6 +956,79 @@
                             },
                             error: () => toastr.error('Failed to archive store.')
                         });
+                    }
+                });
+            });
+
+            // Store Portal Users Management
+            function loadStorePortalUsers(storeId) {
+                $.getJSON(`{{ url('admin/stores') }}/${storeId}/users`, function(res) {
+                    const $tbody = $('#portalUsersTableBody').empty();
+                    if (!res.users || !res.users.length) {
+                        $tbody.append('<tr><td colspan="6" class="text-center text-muted py-3">No Store Portal users linked yet.</td></tr>');
+                        return;
+                    }
+                    res.users.forEach(u => {
+                        const badge = u.is_active
+                            ? '<span class="badge bg-success-subtle text-success">Active</span>'
+                            : '<span class="badge bg-danger-subtle text-danger">Inactive</span>';
+                        $tbody.append(`
+                            <tr>
+                                <td class="fw-semibold">${escapeHtml(u.name)}</td>
+                                <td>${escapeHtml(u.email)}</td>
+                                <td>${escapeHtml(u.phone_display)}</td>
+                                <td class="text-capitalize">${escapeHtml(u.role)}</td>
+                                <td>${badge}</td>
+                                <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-xs btn-outline-secondary toggle-portal-user-btn" data-store-id="${storeId}" data-user-id="${u.id}">
+                                        ${u.is_active ? 'Deactivate' : 'Activate'}
+                                    </button>
+                                </td>
+                            </tr>
+                        `);
+                    });
+                });
+            }
+
+            $(document).on('click', '.portal-users-btn', function() {
+                const storeId = $(this).data('id');
+                $('#portalUsersStoreId').val(storeId);
+                $('#portalUsersStoreName').text($(this).data('name'));
+                $('#portalUsersErrors').addClass('d-none').empty();
+                loadStorePortalUsers(storeId);
+                showModal('storePortalUsersModal');
+            });
+
+            $('#createStoreUserForm').on('submit', function(e) {
+                e.preventDefault();
+                const storeId = $('#portalUsersStoreId').val();
+                $('#portalUsersErrors').addClass('d-none').empty();
+                $.ajax({
+                    url: `{{ url('admin/stores') }}/${storeId}/users`,
+                    method: 'POST',
+                    data: $(this).serialize(),
+                    success: res => {
+                        if (typeof toastr !== 'undefined') toastr.success(res.message);
+                        this.reset();
+                        loadStorePortalUsers(storeId);
+                    },
+                    error: xhr => {
+                        const errs = xhr.responseJSON?.errors;
+                        const msg = errs ? Object.values(errs).map(a => a[0]).join(' ') : (xhr.responseJSON?.message || 'Unable to create store user.');
+                        $('#portalUsersErrors').removeClass('d-none').text(msg);
+                    }
+                });
+            });
+
+            $(document).on('click', '.toggle-portal-user-btn', function() {
+                const storeId = $(this).data('store-id');
+                const userId = $(this).data('user-id');
+                $.ajax({
+                    url: `{{ url('admin/stores') }}/${storeId}/users/${userId}/toggle`,
+                    method: 'PATCH',
+                    success: res => {
+                        if (typeof toastr !== 'undefined') toastr.success(res.message);
+                        loadStorePortalUsers(storeId);
                     }
                 });
             });

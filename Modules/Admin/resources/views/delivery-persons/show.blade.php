@@ -1,6 +1,6 @@
 @extends('admin::layouts.app')
 
-@section('title', $deliveryPerson->full_name . ' - Courier Profile')
+@section('title', $deliveryPerson->full_name . ' - Delivery Person Profile')
 
 @section('content')
 <div class="saas-page-shell py-4 px-3 px-md-4">
@@ -44,6 +44,46 @@
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show rounded-3">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     @endif
+
+    @can('manage-delivery-settlements', 'admin')
+        <div class="card border-0 shadow-sm mb-4" style="border-radius: 14px;">
+            <div class="card-body p-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div>
+                        <h6 class="fw-bold mb-0"><i class="mdi mdi-shield-account-outline text-primary me-1"></i>Delivery Person Portal Access &amp; Cash Custody</h6>
+                        <div class="small text-muted">
+                            Login Email: <strong>{{ $deliveryPerson->email }}</strong> &bull; Phone: <strong>{{ $deliveryPerson->phone_display }}</strong>
+                            &bull; Last Login: <strong>{{ $deliveryPerson->last_login_at?->format('d M Y, H:i') ?? 'Never' }}</strong>
+                        </div>
+                    </div>
+                    <a href="{{ route('admin.delivery-person-settlements.index', ['delivery_person_id' => $deliveryPerson->id]) }}" class="btn btn-sm btn-outline-primary">
+                        View Cash Account &amp; Collect Cash
+                    </a>
+                </div>
+                <form method="POST" action="{{ route('admin.delivery-persons.portal-access', $deliveryPerson) }}" class="row g-2 align-items-end small">
+                    @csrf
+                    <div class="col-12 col-md-3">
+                        <label class="form-label fw-semibold mb-1">Portal Access</label>
+                        <select name="portal_access_enabled" class="form-select form-select-sm">
+                            <option value="1" {{ $deliveryPerson->portal_access_enabled ? 'selected' : '' }}>Enabled</option>
+                            <option value="0" {{ !$deliveryPerson->portal_access_enabled ? 'selected' : '' }}>Disabled</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label fw-semibold mb-1">Set / Reset Password</label>
+                        <input type="password" name="password" class="form-control form-control-sm" placeholder="Min 8 chars (optional)">
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <label class="form-label fw-semibold mb-1">Confirm Password</label>
+                        <input type="password" name="password_confirmation" class="form-control form-control-sm" placeholder="Confirm password">
+                    </div>
+                    <div class="col-12 col-md-3">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">Save Portal Access</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endcan
 
     {{-- Top 7 Statistics --}}
     <div class="row g-3 mb-4">

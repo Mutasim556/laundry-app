@@ -147,7 +147,7 @@ Route::post('/paypal/webhook', [PayPalPaymentController::class, 'webhook'])->nam
 
 // Customer Order History & Read-Only Booking Details (modifications/deletions blocked)
 Route::prefix('my-orders')->name('orders.')->group(function () {
-    Route::get('/', [CustomerBookingController::class, 'index'])->name('index');
+    Route::get('/', [CustomerBookingController::class, 'index'])->middleware('auth')->name('index');
     Route::post('/lookup', [CustomerBookingController::class, 'lookup'])->middleware('throttle:20,1')->name('lookup');
     Route::get('/{reference}', [CustomerBookingController::class, 'show'])->name('show');
     Route::match(['put', 'patch'], '/{reference}', [CustomerBookingController::class, 'rejectMutation'])->name('update');

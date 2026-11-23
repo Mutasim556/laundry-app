@@ -144,4 +144,24 @@ class Store extends Model
     {
         return $this->belongsTo(LocalArea::class);
     }
+
+    public function storeUsers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\StoreUser::class, 'store_id')->orderByDesc('id');
+    }
+
+    public function storeEarnings(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\BookingStoreEarning::class, 'store_id')->orderByDesc('id');
+    }
+
+    public function storeAccounts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\StoreAccount::class, 'store_id')->orderBy('currency');
+    }
+
+    public function storeTransactions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\StoreTransaction::class, 'store_id')->orderByDesc('id');
+    }
 }
