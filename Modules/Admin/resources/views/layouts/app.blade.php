@@ -29,6 +29,7 @@
 
     <!-- Custom CSS -->
     <link href="{{ asset('admin/dist/css/style.css') }}" rel="stylesheet" />
+    <link href="{{ asset('admin/dist/css/custom.css') }}?v={{ file_exists(public_path('admin/dist/css/custom.css')) ? filemtime(public_path('admin/dist/css/custom.css')) : '1' }}" rel="stylesheet" />
     @stack('styles')
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->

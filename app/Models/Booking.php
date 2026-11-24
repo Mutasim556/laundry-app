@@ -36,6 +36,16 @@ class Booking extends Model
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const CUSTOMER_STATUS_PENDING = 'pending';
+    public const CUSTOMER_STATUS_IN_PROGRESS = 'in_progress';
+    public const CUSTOMER_STATUS_COMPLETED = 'completed';
+    public const CUSTOMER_STATUS_CANCELLED = 'cancelled';
+
+    public const CUSTOMER_PENDING_BOOKING_STATUSES = [
+        self::STATUS_CONFIRMED,
+        self::STATUS_PROCESSING,
+    ];
+
     public const OPERATIONAL_STATUSES = [
         self::STATUS_PROCESSING => 'Processing',
         self::STATUS_STORE_ASSIGNED => 'Store Assigned',
@@ -264,6 +274,7 @@ class Booking extends Model
             'payment_snapshot' => 'array',
             'item_quantities' => 'array',
             'is_locked' => 'boolean',
+            'collection_otp_verified_at' => 'datetime',
             'version' => 'integer',
             'estimated_amount_minor' => 'integer',
             'service_fee_minor' => 'integer',
@@ -295,6 +306,198 @@ class Booking extends Model
     public function operationalItems(): HasMany
     {
         return $this->hasMany(BookingOperationalItem::class)->orderBy('id');
+    }
+
+    public function operationalCategories(): HasMany
+    {
+        return $this->hasMany(BookingOperationalCategory::class)->orderBy('id');
+    }
+
+    public function deliveryAssignments(): HasMany
+    {
+        return $this->hasMany(\Modules\Admin\Models\DeliveryAssignment::class)->orderByDesc('id');
+    }
+
+    public function assignedStore(): BelongsTo
+    {
+        return $this->belongsTo(\Modules\Admin\Models\Store::class, 'assigned_store_id');
+    }
+
+    public function storeAssignments(): HasMany
+    {
+        return $this->hasMany(\Modules\Admin\App\Models\BookingStoreAssignment::class)->orderByDesc('id');
+    }
+
+    public function storeEarnings(): HasMany
+    {
+        return $this->hasMany(BookingStoreEarning::class)->orderByDesc('id');
+    }
+
+    public function currentStoreEarning(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BookingStoreEarning::class)->where('is_current', true)->latest('id');
+    }
+
+    public function storeTransactions(): HasMany
+    {
+        return $this->hasMany(StoreTransaction::class)->orderByDesc('id');
+    }
+
+    public function financialSettlements(): HasMany
+    {
+        return $this->hasMany(BookingFinancialSettlement::class)->orderByDesc('id');
+    }
+
+    public function currentFinancialSettlement(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BookingFinancialSettlement::class)->where('is_current', true)->latest('id');
+    }
+
+    public function adminAccountTransactions(): HasMany
+    {
+        return $this->hasMany(AdminAccountTransaction::class)->orderByDesc('id');
+    }
+
+    public function collectionOtps(): HasMany
+    {
+        return $this->hasMany(BookingCollectionOtp::class)->orderByDesc('id');
+    }
+
+    public function customerPayments(): HasMany
+    {
+        return $this->hasMany(BookingCustomerPayment::class)->orderByDesc('id');
+    }
+
+    public function storeHandovers(): HasMany
+    {
+        return $this->hasMany(BookingStoreHandover::class)->orderByDesc('id');
+    }
+
+    public function currentStoreHandover(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BookingStoreHandover::class)->latest('id');
+    }
+
+    public function currentStoreAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\Modules\Admin\App\Models\BookingStoreAssignment::class)->where('is_current', true)->latest('id');
+    }
+
+    public function hasValidActiveStoreAssignment(): bool
+    {
+        return $this->currentStoreAssignment()
+            ->whereHas('store', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'))
+            ->exists();
+    }
+
+    public function currentCollectionAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\Modules\Admin\Models\DeliveryAssignment::class)
+            ->where('assignment_type', \Modules\Admin\Models\DeliveryAssignment::TYPE_CUSTOMER_COLLECTION)
+            ->whereNotIn('status', [
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_CANCELLED,
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_FAILED,
+            ])
+            ->latest('id');
+    }
+
+    public function currentFinalDeliveryAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\Modules\Admin\Models\DeliveryAssignment::class)
+            ->where('assignment_type', \Modules\Admin\Models\DeliveryAssignment::TYPE_FINAL_DELIVERY)
+            ->whereNotIn('status', [
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_CANCELLED,
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_FAILED,
+            ])
+            ->latest('id');
+    }
+
+    public function hasValidCollectionCourierAssignment(): bool
+    {
+        return $this->currentCollectionAssignment()
+            ->whereHas('deliveryPerson', fn ($q) => $q->where('work_status', 'active')->whereNull('deleted_at'))
+            ->exists();
+    }
+
+    public function hasValidFinalDeliveryCourierAssignment(): bool
+    {
+        return $this->currentFinalDeliveryAssignment()
+            ->whereHas('deliveryPerson', fn ($q) => $q->where('work_status', 'active')->whereNull('deleted_at'))
+            ->exists();
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(BookingInvoice::class)->orderByDesc('revision_number');
+    }
+
+    public function currentInvoice(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BookingInvoice::class)->where('is_current', true)->latest('revision_number');
+    }
+
+    public function isInvoiceEligible(CurrencyService $currencyService): bool
+    {
+        if ($this->booking_status === self::STATUS_CANCELLED) {
+            return false;
+        }
+
+        $completedStages = $this->getCompletedOperationalStatuses();
+        if (! in_array(self::STATUS_FINALIZED, $completedStages, true)) {
+            return false;
+        }
+
+        $pricingSummary = $this->getOperationalPricingSummary($currencyService);
+
+        return (bool) ($pricingSummary['is_pricing_complete'] ?? false);
+    }
+
+    public function getCustomerStatusGroup(): string
+    {
+        if ($this->booking_status === self::STATUS_CANCELLED) {
+            return self::CUSTOMER_STATUS_CANCELLED;
+        }
+
+        $completedStages = $this->getCompletedOperationalStatuses();
+        if (
+            $this->booking_status === self::STATUS_COMPLETED
+            || $this->booking_status === self::STATUS_DELIVERED
+            || in_array(self::STATUS_COMPLETED, $completedStages, true)
+        ) {
+            return self::CUSTOMER_STATUS_COMPLETED;
+        }
+
+        if (
+            in_array($this->booking_status, self::CUSTOMER_PENDING_BOOKING_STATUSES, true)
+            && ! in_array(self::STATUS_PROCESSING, $completedStages, true)
+        ) {
+            return self::CUSTOMER_STATUS_PENDING;
+        }
+
+        return self::CUSTOMER_STATUS_IN_PROGRESS;
+    }
+
+    public function getCustomerStatusBadgeStyle(): array
+    {
+        return match ($this->getCustomerStatusGroup()) {
+            self::CUSTOMER_STATUS_COMPLETED => ['label' => 'Completed', 'style' => 'background-color: #DCFCE7; color: #166534;'],
+            self::CUSTOMER_STATUS_CANCELLED => ['label' => 'Cancelled', 'style' => 'background-color: #FEE2E2; color: #B91C1C;'],
+            self::CUSTOMER_STATUS_PENDING => ['label' => 'Pending', 'style' => 'background-color: #FEF3C7; color: #92400E;'],
+            default => ['label' => $this->getStatusLabel(), 'style' => 'background-color: #EDE9FE; color: #5B21B6;'],
+        };
+    }
+
+    public static function associateVerifiedUserBookings(User $user): int
+    {
+        if (! $user->email_verified_at || trim((string) $user->email) === '') {
+            return 0;
+        }
+
+        return self::query()
+            ->whereNull('user_id')
+            ->whereNotNull('confirmed_at')
+            ->whereRaw('LOWER(customer_email) = ?', [strtolower(trim((string) $user->email))])
+            ->update(['user_id' => $user->id]);
     }
 
     public function isConfirmedAndLocked(): bool

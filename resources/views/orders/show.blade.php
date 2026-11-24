@@ -323,6 +323,79 @@
                         </div>
 
                         <div class="mb-3">
+                            <div class="fw-semibold mb-1" style="color: #777777;">Assigned Laundry Store</div>
+                            @if ($booking->currentStoreAssignment)
+                                <div class="p-2 px-3 rounded-3" style="background-color: #FFF8E5; border: 1px solid #FDE68A;">
+                                    <div class="fw-bold" style="color: #171717;">{{ $booking->currentStoreAssignment->store_name_snapshot }}</div>
+                                    <div style="color: #475569;">{{ $booking->currentStoreAssignment->store_address_snapshot }}</div>
+                                    @if ($booking->currentStoreAssignment->store_city_snapshot)
+                                        <div style="color: #475569;">{{ $booking->currentStoreAssignment->store_city_snapshot }}</div>
+                                    @endif
+                                    @if ($booking->currentStoreAssignment->store_postcode_snapshot)
+                                        <div class="fw-semibold mt-1" style="color: #171717;">{{ $booking->currentStoreAssignment->store_postcode_snapshot }}</div>
+                                    @endif
+                                    @if ($booking->currentStoreAssignment->store_phone_snapshot)
+                                        <div class="mt-1" style="color: #475569;">Phone: {{ $booking->currentStoreAssignment->store_phone_snapshot }}</div>
+                                    @endif
+                                </div>
+                            @else
+                                <div class="p-2 px-3 rounded-3 bg-light border text-muted">
+                                    Store assignment pending
+                                </div>
+                            @endif
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="fw-semibold mb-1" style="color: #777777;">Collection Delivery Person</div>
+                            @if ($booking->currentCollectionAssignment && $booking->currentCollectionAssignment->deliveryPerson)
+                                @php $collectionPerson = $booking->currentCollectionAssignment->deliveryPerson; @endphp
+                                <div class="p-2 px-3 rounded-3" style="background-color: #F8FAFC; border: 1px solid #E2E8F0;">
+                                    <div class="d-flex justify-content-between align-items-center gap-2">
+                                        <span class="fw-bold" style="color: #171717;">{{ $collectionPerson->full_name }}</span>
+                                        <span class="badge rounded-pill px-2 py-1" style="background-color: #DBEAFE; color: #1D4ED8;">
+                                            {{ $booking->currentCollectionAssignment->status_label }}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1" style="color: #475569;">
+                                        Phone:
+                                        @if ($collectionPerson->phone_display !== '')
+                                            <a href="tel:{{ preg_replace('/\s+/', '', $collectionPerson->phone_display) }}" class="text-decoration-none fw-semibold" style="color: #171717;">{{ $collectionPerson->phone_display }}</a>
+                                        @else
+                                            <span>Not provided</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @else
+                                <div class="p-2 px-3 rounded-3 bg-light border text-muted">
+                                    Collection delivery person not assigned yet.
+                                </div>
+                            @endif
+                        </div>
+
+                        @if ($booking->currentFinalDeliveryAssignment && $booking->currentFinalDeliveryAssignment->deliveryPerson)
+                            @php $finalPerson = $booking->currentFinalDeliveryAssignment->deliveryPerson; @endphp
+                            <div class="mb-3">
+                                <div class="fw-semibold mb-1" style="color: #777777;">Final Delivery Person</div>
+                                <div class="p-2 px-3 rounded-3" style="background-color: #F8FAFC; border: 1px solid #E2E8F0;">
+                                    <div class="d-flex justify-content-between align-items-center gap-2">
+                                        <span class="fw-bold" style="color: #171717;">{{ $finalPerson->full_name }}</span>
+                                        <span class="badge rounded-pill px-2 py-1" style="background-color: #D1FAE5; color: #047857;">
+                                            {{ $booking->currentFinalDeliveryAssignment->status_label }}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1" style="color: #475569;">
+                                        Phone:
+                                        @if ($finalPerson->phone_display !== '')
+                                            <a href="tel:{{ preg_replace('/\s+/', '', $finalPerson->phone_display) }}" class="text-decoration-none fw-semibold" style="color: #171717;">{{ $finalPerson->phone_display }}</a>
+                                        @else
+                                            <span>Not provided</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+
+                        <div class="mb-3">
                             <div class="fw-semibold mb-1" style="color: #777777;">Address</div>
                             @if (!empty($address['hotel_name']))
                                 <div class="fw-bold" style="color: #171717;">{{ $address['hotel_name'] }}</div>

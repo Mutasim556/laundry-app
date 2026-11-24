@@ -15,7 +15,7 @@ $(function () {
     ""
   );
   var element = $("ul#sidebarnav a").filter(function () {
-    return this.href === url || this.href === path; // || url.href.indexOf(this.href) === 0;
+    return this.href === url || this.href === path;
   });
   element.parentsUntil(".sidebar-nav").each(function (index) {
     if ($(this).is("li") && $(this).children("a").length !== 0) {
@@ -35,13 +35,13 @@ $(function () {
     if (!$(this).hasClass("active")) {
       // hide any open menus and remove all other classes
       $("ul", $(this).parents("ul:first")).removeClass("in");
-      $("a", $(this).parents("ul:first")).removeClass("active");
+      $("a", $(this).parents("ul:first")).removeClass("active").attr("aria-expanded", "false");
 
       // open our new menu and add the open class
       $(this).next("ul").addClass("in");
-      $(this).addClass("active");
+      $(this).addClass("active").attr("aria-expanded", "true");
     } else if ($(this).hasClass("active")) {
-      $(this).removeClass("active");
+      $(this).removeClass("active").attr("aria-expanded", "false");
       $(this).parents("ul:first").removeClass("active");
       $(this).next("ul").removeClass("in");
     }
@@ -51,10 +51,11 @@ $(function () {
   });
 
   // Auto scroll to the active nav
-  if ($(window).width() > 768 || window.Touch) {
+  var $selectedItem = $("#sidebarnav .sidebar-item.selected");
+  if ($selectedItem.length && ($(window).width() > 768 || window.Touch)) {
     $(".scroll-sidebar").animate(
       {
-        scrollTop: $("#sidebarnav .sidebar-item.selected").offset().top - 250,
+        scrollTop: $selectedItem.offset().top - 250,
       },
       500
     );
