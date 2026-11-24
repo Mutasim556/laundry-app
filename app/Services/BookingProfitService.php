@@ -45,29 +45,38 @@ class BookingProfitService
         $settlement = $booking->currentFinancialSettlement;
 
         // 1. Eligible Service Revenue & Store Net Earnings (use persisted snapshot when available)
+        $missingComponents = [];
+        $store = $booking->currentStoreAssignment?->store;
         if ($storeEarning) {
             $eligibleServiceMinor = (int) $storeEarning->eligible_service_amount_minor;
             $storeNetEarningsMinor = (int) $storeEarning->net_store_earnings_minor;
             $storeCommissionRate = (float) $storeEarning->commission_rate;
             $hasStoreBasis = true;
+            $storeCostStatus = 'finalized';
         } else {
             $eligibleServiceMinor = (int) $pricingSummary['items_subtotal_minor'];
-            $store = $booking->currentStoreAssignment?->store;
             if ($store && $store->commission_rate !== null) {
                 $storeCommissionRate = max(0.0, min(100.0, (float) $store->commission_rate));
                 $commissionMinor = (int) round($eligibleServiceMinor * ($storeCommissionRate / 100));
                 $storeNetEarningsMinor = max(0, $eligibleServiceMinor - $commissionMinor);
                 $hasStoreBasis = true;
+                $storeCostStatus = 'estimated';
             } else {
                 $storeCommissionRate = null;
                 $storeNetEarningsMinor = 0;
                 $hasStoreBasis = false;
+                $storeCostStatus = 'missing';
+                $missingComponents[] = $store
+                    ? 'Store processing cost has not been recorded (store commission rate is not configured).'
+                    : 'Store assignment is missing — store processing cost has not been recorded.';
             }
         }
 
         $storeContributionMinor = $eligibleServiceMinor - $storeNetEarningsMinor;
 
         // 2. Delivery Revenue & Payouts (use persisted settlement when settled)
+        $colAsg = $booking->currentCollectionAssignment;
+        $finAsg = $booking->currentFinalDeliveryAssignment;
         if ($settlement && $settlement->settlement_status === 'settled') {
             $deliveryFeeMinor = (int) $settlement->delivery_fee_minor;
             $collectionPaymentMinor = (int) $settlement->collection_delivery_payment_minor;
@@ -75,6 +84,8 @@ class BookingProfitService
             $customerTipMinor = (int) $settlement->customer_tip_minor;
             $collectionTipShareMinor = (int) $settlement->collection_tip_share_minor;
             $finalTipShareMinor = (int) $settlement->final_tip_share_minor;
+            $collectionCostStatus = 'finalized';
+            $finalCostStatus = 'finalized';
         } else {
             $deliveryFeeMinor = (int) $allocationPreview['delivery_fee_minor'];
             $collectionPaymentMinor = (int) $allocationPreview['collection_payment_minor'];
@@ -82,6 +93,20 @@ class BookingProfitService
             $customerTipMinor = (int) $allocationPreview['customer_tip_minor'];
             $collectionTipShareMinor = (int) $allocationPreview['collection_tip_share_minor'];
             $finalTipShareMinor = (int) $allocationPreview['final_tip_share_minor'];
+
+            $collectionCostStatus = ($colAsg && $colAsg->rate_minor !== null) ? 'recorded' : ($collectionPaymentMinor > 0 ? 'estimated' : 'missing');
+            $finalCostStatus = ($finAsg && $finAsg->rate_minor !== null) ? 'recorded' : ($finalPaymentMinor > 0 ? 'estimated' : 'missing');
+
+            if (! $colAsg) {
+                $missingComponents[] = 'Collection Delivery Person is not assigned yet (collection cost is estimated).';
+            }
+            if (! $finAsg) {
+                $missingComponents[] = 'Final Delivery Person is not assigned yet (final delivery cost is estimated).';
+            }
+        }
+
+        if (! (bool) $pricingSummary['is_pricing_complete']) {
+            $missingComponents[] = 'Operational service pricing is not finalized yet.';
         }
 
         $deliveryContributionMinor = $deliveryFeeMinor - $collectionPaymentMinor - $finalPaymentMinor;
@@ -99,7 +124,8 @@ class BookingProfitService
 
         $otherContributionMinor = $serviceFeeMinor - $discountMinor - $refundedMinor - $otherPlatformCostsMinor;
 
-        // 5. Total Booking Contribution Profit & Recognized Net Revenue
+        // 5. Total Direct Costs, Booking Contribution Profit & Recognized Net Revenue
+        $totalDirectCostsMinor = $storeNetEarningsMinor + $collectionPaymentMinor + $finalPaymentMinor + $otherPlatformCostsMinor;
         $totalProfitMinor = $storeContributionMinor + $deliveryContributionMinor + $otherContributionMinor;
         $recognizedNetRevenueMinor = $eligibleServiceMinor + $serviceFeeMinor + $deliveryFeeMinor - $discountMinor - $refundedMinor;
 
@@ -110,10 +136,15 @@ class BookingProfitService
             ? number_format($marginPercentage, 2, '.', '') . '%'
             : 'N/A';
 
-        // 6. Lifecycle Visibility State
+        // 6. Lifecycle Visibility State (show available financial data even when some cost bases are missing)
+        $hasAnyFinancialData = $recognizedNetRevenueMinor > 0
+            || $eligibleServiceMinor > 0
+            || $serviceFeeMinor > 0
+            || $deliveryFeeMinor > 0
+            || $totalDirectCostsMinor > 0;
         $isPosted = $isCompletedDone && $settlement !== null && $settlement->settlement_status === 'settled';
         $hasAuthoritativeProfit = $isFinalizedDone && $hasStoreBasis;
-        $hasProvisionalEstimate = ! $hasAuthoritativeProfit && $hasStoreBasis && ($eligibleServiceMinor > 0 || $serviceFeeMinor > 0 || $deliveryFeeMinor > 0);
+        $hasProvisionalEstimate = ! $hasAuthoritativeProfit && $hasAnyFinancialData;
 
         if ($booking->cancelled_at !== null) {
             $statusLabel = 'Booking Cancelled';
@@ -124,11 +155,14 @@ class BookingProfitService
         } elseif ($hasAuthoritativeProfit) {
             $statusLabel = 'Finalized Booking Profit';
             $statusBadge = 'primary';
+        } elseif ($hasProvisionalEstimate && ! $hasStoreBasis) {
+            $statusLabel = 'Provisional (Incomplete Costs)';
+            $statusBadge = 'warning';
         } elseif ($hasProvisionalEstimate) {
             $statusLabel = 'Estimated Booking Profit (Provisional)';
             $statusBadge = 'warning';
         } else {
-            $statusLabel = 'Profit Not Finalized';
+            $statusLabel = 'Incomplete Financial Data';
             $statusBadge = 'warning';
         }
 
@@ -140,7 +174,13 @@ class BookingProfitService
             'is_posted' => $isPosted,
             'is_provisional' => ! $hasAuthoritativeProfit,
             'has_provisional_estimate' => $hasProvisionalEstimate,
+            'has_any_financial_data' => $hasAnyFinancialData,
             'has_store_basis' => $hasStoreBasis,
+            'store_cost_status' => $storeCostStatus,
+            'collection_cost_status' => $collectionCostStatus,
+            'final_cost_status' => $finalCostStatus,
+            'missing_components' => array_values(array_unique($missingComponents)),
+            'finalized_at' => $storeEarning?->finalized_at?->format('d M Y, H:i'),
             'store_commission_rate' => $storeCommissionRate,
             'eligible_service_revenue_minor' => $eligibleServiceMinor,
             'store_net_earnings_minor' => $storeNetEarningsMinor,
@@ -154,6 +194,7 @@ class BookingProfitService
             'refunded_minor' => $refundedMinor,
             'tax_minor' => $taxMinor,
             'other_platform_costs_minor' => $otherPlatformCostsMinor,
+            'total_direct_costs_minor' => $totalDirectCostsMinor,
             'other_contribution_minor' => $otherContributionMinor,
             'customer_tip_minor' => $customerTipMinor,
             'allocated_tips_minor' => $allocatedTipsMinor,
@@ -164,7 +205,7 @@ class BookingProfitService
             'margin_percentage_formatted' => $marginPercentageFormatted,
             'formatted' => [
                 'eligible_service_revenue' => $this->currencyService->formatMinor($eligibleServiceMinor, $currency),
-                'store_net_earnings' => $this->currencyService->formatMinor($storeNetEarningsMinor, $currency),
+                'store_net_earnings' => $hasStoreBasis ? $this->currencyService->formatMinor($storeNetEarningsMinor, $currency) : 'Not recorded',
                 'store_contribution' => $this->formatSignedMinor($storeContributionMinor, $currency),
                 'delivery_fee' => $this->currencyService->formatMinor($deliveryFeeMinor, $currency),
                 'collection_payment' => $this->currencyService->formatMinor($collectionPaymentMinor, $currency),
@@ -174,7 +215,8 @@ class BookingProfitService
                 'discount' => $this->currencyService->formatMinor($discountMinor, $currency),
                 'refunded' => $this->currencyService->formatMinor($refundedMinor, $currency),
                 'tax' => $this->currencyService->formatMinor($taxMinor, $currency),
-                'other_contribution' => $this->formatSignedMinor($otherPlatformCostsMinor === 0 ? $otherContributionMinor : $otherContributionMinor, $currency),
+                'other_contribution' => $this->formatSignedMinor($otherContributionMinor, $currency),
+                'total_direct_costs' => $this->currencyService->formatMinor($totalDirectCostsMinor, $currency),
                 'customer_tip' => $this->currencyService->formatMinor($customerTipMinor, $currency),
                 'allocated_tips' => $this->currencyService->formatMinor($allocatedTipsMinor, $currency),
                 'recognized_net_revenue' => $this->currencyService->formatMinor($recognizedNetRevenueMinor, $currency),

@@ -97,6 +97,15 @@ class BookingManagementController extends Controller
 
     public function show(Booking $booking)
     {
+        if (
+            $booking->booking_status === Booking::STATUS_STORE_COMPLETE
+            && in_array(Booking::STATUS_STORE_COMPLETE, $booking->getCompletedOperationalStatuses(), true)
+        ) {
+            $booking->booking_status = Booking::STATUS_DELIVERY_MAN_ASSIGNED_FOR_STORE_PICKUP;
+            $booking->version = ((int) $booking->version) + 1;
+            $booking->save();
+        }
+
         $booking->syncOperationalItemsFromSnapshotIfEmpty($this->currencyService);
         $booking->load([
             'operationalItems.service',
@@ -119,6 +128,9 @@ class BookingManagementController extends Controller
             'storeHandovers.collectionDeliveryPerson',
             'storeHandovers.acceptedByStoreUser',
             'storeHandovers.rejectedByStoreUser',
+            'latestStorePickupRequest.deliveryPerson',
+            'storePickupRequests.deliveryPerson',
+            'storePickupRequests.requestedByStoreUser',
         ]);
 
         $currencyService = $this->currencyService;
@@ -1821,6 +1833,11 @@ class BookingManagementController extends Controller
                     'earnings_status' => 'not_payable',
                 ]);
 
+                app(\App\Services\StorePickupDeliveryService::class)->cancelActiveRequestsForAssignment(
+                    $existingAssignment,
+                    "Superseded by reassignment: {$reason}"
+                );
+
                 DeliveryAssignmentEvent::create([
                     'delivery_assignment_id' => $existingAssignment->id,
                     'delivery_person_id' => $existingAssignment->delivery_person_id,
@@ -1845,6 +1862,20 @@ class BookingManagementController extends Controller
                 $isReassignment ? $reason : null,
                 $postcodeMatched ? null : $reason
             );
+
+            if ($assignmentType === DeliveryAssignment::TYPE_FINAL_DELIVERY && $booking->booking_status === Booking::STATUS_STORE_COMPLETE) {
+                $stages = is_array($booking->completed_operational_stages) ? $booking->completed_operational_stages : [];
+                if (! array_key_exists(Booking::STATUS_STORE_COMPLETE, $stages)) {
+                    $stages[Booking::STATUS_STORE_COMPLETE] = [
+                        'completed_at' => now()->toIso8601String(),
+                        'admin_id' => $this->adminId(),
+                    ];
+                }
+                $booking->completed_operational_stages = $stages;
+                $booking->booking_status = Booking::STATUS_DELIVERY_MAN_ASSIGNED_FOR_STORE_PICKUP;
+                $booking->version = ((int) $booking->version) + 1;
+                $booking->save();
+            }
 
             $legLabel = $assignmentType === DeliveryAssignment::TYPE_FINAL_DELIVERY ? 'Final Delivery' : 'Customer Collection';
             $this->logAudit(

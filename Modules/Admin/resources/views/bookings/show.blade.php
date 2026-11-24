@@ -1283,7 +1283,9 @@
         @php
             $psTotalProfit = (int) $profitSummary['total_profit_minor'];
             $psIsPositive = $psTotalProfit >= 0;
-            $psCanShowNumbers = $profitSummary['is_finalized'] || $profitSummary['has_provisional_estimate'];
+            $psCanShowNumbers = $profitSummary['is_finalized'] || $profitSummary['has_provisional_estimate'] || !empty($profitSummary['has_any_financial_data']);
+            $psMissing = $profitSummary['missing_components'] ?? [];
+            $psHasStoreBasis = (bool) ($profitSummary['has_store_basis'] ?? false);
         @endphp
         <!-- Booking Profit Summary (Compact Contribution Profit Card) -->
         <div class="card border-0 mb-3" id="bookingProfitSummaryCard"
@@ -1310,11 +1312,55 @@
                 @if(!$psCanShowNumbers)
                     <div id="profitNotFinalizedNotice" class="bg-white rounded-3 p-3 border small text-center" style="border-color: #DDD6FE !important; color: #64748B;">
                         <i class="mdi mdi-clock-outline text-warning me-1"></i>
-                        <strong>Profit Not Finalized</strong> &mdash; Complete store assignment and operational pricing to view provisional or finalized booking profit.
+                        <strong>Incomplete Financial Data</strong> &mdash; No operational revenue or direct costs have been recorded for this booking yet.
                     </div>
                 @endif
 
                 <div id="profitBreakdownContent" class="{{ $psCanShowNumbers ? '' : 'd-none' }}">
+                    <!-- Top 4-Metric KPI Strip -->
+                    <div class="row g-2 g-md-3 mb-3">
+                        <div class="col-6 col-lg-3">
+                            <div class="bg-white rounded-3 p-2 p-md-3 border h-100" style="border-left: 4px solid #3B82F6 !important; border-color: #E2E8F0;">
+                                <div class="text-uppercase fw-bold" style="font-size: 0.68rem; color: #3B82F6; letter-spacing: 0.04em;">Booking Revenue</div>
+                                <div class="fw-bold fs-6 mt-1" id="profitKpiRevenue" style="color: #171717;">{{ $profitSummary['formatted']['recognized_net_revenue'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="bg-white rounded-3 p-2 p-md-3 border h-100" style="border-left: 4px solid #F59E0B !important; border-color: #E2E8F0;">
+                                <div class="d-flex justify-content-between align-items-center gap-1">
+                                    <span class="text-uppercase fw-bold" style="font-size: 0.68rem; color: #D97706; letter-spacing: 0.04em;">Total Direct Costs</span>
+                                    <span id="profitKpiCostIncompleteBadge" class="badge bg-warning-subtle text-warning-emphasis {{ !empty($psMissing) ? '' : 'd-none' }}" style="font-size: 0.6rem;">Partial</span>
+                                </div>
+                                <div class="fw-bold fs-6 mt-1" id="profitKpiDirectCosts" style="color: #171717;">{{ $profitSummary['formatted']['total_direct_costs'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="bg-white rounded-3 p-2 p-md-3 border h-100" id="profitKpiContributionBox" style="border-left: 4px solid {{ $psIsPositive ? '#16A34A' : '#EF4444' }} !important; border-color: #E2E8F0;">
+                                <div class="text-uppercase fw-bold" style="font-size: 0.68rem; color: {{ $psIsPositive ? '#16A34A' : '#EF4444' }}; letter-spacing: 0.04em;">
+                                    {{ $profitSummary['is_provisional'] ? 'Provisional Contribution' : 'Contribution Profit' }}
+                                </div>
+                                <div class="fw-bold fs-6 mt-1" id="profitKpiContribution" style="color: {{ $psIsPositive ? '#16A34A' : '#EF4444' }};">{{ $profitSummary['formatted']['total_profit'] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-3">
+                            <div class="bg-white rounded-3 p-2 p-md-3 border h-100" style="border-left: 4px solid #8B5CF6 !important; border-color: #E2E8F0;">
+                                <div class="text-uppercase fw-bold" style="font-size: 0.68rem; color: #6D28D9; letter-spacing: 0.04em;">Margin</div>
+                                <div class="fw-bold fs-6 mt-1" id="profitKpiMargin" style="color: #171717;">{{ $profitSummary['margin_percentage_formatted'] }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Missing Cost Components Alert -->
+                    <div id="profitMissingNotice" class="rounded-3 p-2 px-3 mb-3 small {{ !empty($psMissing) ? '' : 'd-none' }}"
+                         style="background-color: #FFF8E5; border: 1px solid #FCD34D; color: #92400E;">
+                        <div class="fw-semibold mb-1"><i class="mdi mdi-alert-circle-outline me-1"></i>Missing / Pending Cost Components</div>
+                        <ul class="mb-0 ps-3" id="profitMissingList">
+                            @foreach($psMissing as $m)
+                                <li>{{ $m }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+
                     <div class="row g-2 g-md-3 mb-3">
                         <!-- Block 1: Store Contribution -->
                         <div class="col-12 col-lg-4">
@@ -1326,12 +1372,14 @@
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="text-muted">
-                                        Store Net Earnings
+                                        Store Processing Cost
                                         @if($profitSummary['store_commission_rate'] !== null)
                                             <span class="badge bg-light text-secondary border ms-1" style="font-size: 0.65rem;">{{ number_format((float) $profitSummary['store_commission_rate'], 1) }}% comm.</span>
                                         @endif
                                     </span>
-                                    <span class="fw-semibold text-danger" id="profitStoreNet">-{{ $profitSummary['formatted']['store_net_earnings'] }}</span>
+                                    <span class="fw-semibold {{ $psHasStoreBasis ? 'text-danger' : 'text-warning-emphasis' }}" id="profitStoreNet">
+                                        {{ $psHasStoreBasis ? '-' . $profitSummary['formatted']['store_net_earnings'] : 'Not recorded' }}
+                                    </span>
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center pt-2 border-top">
                                     <span class="fw-semibold text-dark">Store Contribution</span>
@@ -1604,6 +1652,12 @@
                             <div class="d-flex flex-wrap gap-2 mb-2">
                                 <span class="badge bg-white text-dark border"><i class="mdi mdi-phone text-success me-1"></i><span id="cardCollectionPhone">{{ $collectionPerson?->phone_display ?: 'Not provided' }}</span></span>
                                 <span class="badge bg-primary-subtle text-primary" id="cardCollectionStatus">{{ $collectionAssignment?->status_label ?? '' }}</span>
+                                @if($collectionAssignment)
+                                    <span class="badge bg-light text-dark border">{{ $collectionAssignment->job_code }}</span>
+                                    <span class="badge {{ $collectionAssignment->earnings_status === 'credited' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning-emphasis' }}">
+                                        Earning: {{ ucfirst($collectionAssignment->earnings_status ?? 'pending') }}
+                                    </span>
+                                @endif
                             </div>
                             <div style="font-size: 0.78rem; color: #475569;">
                                 Assigned: <span id="cardCollectionAssignedAt" class="fw-semibold" style="color: #171717;">{{ $collectionAssignment?->assigned_at?->format('d M Y, H:i') ?? '-' }}</span>
@@ -1688,6 +1742,12 @@
                             <div class="d-flex flex-wrap gap-2 mb-2">
                                 <span class="badge bg-white text-dark border"><i class="mdi mdi-phone text-success me-1"></i><span id="cardFinalPhone">{{ $finalPerson?->phone_display ?: 'Not provided' }}</span></span>
                                 <span class="badge bg-success-subtle text-success" id="cardFinalStatus">{{ $finalDeliveryAssignment?->status_label ?? '' }}</span>
+                                @if($finalDeliveryAssignment)
+                                    <span class="badge bg-light text-dark border">{{ $finalDeliveryAssignment->job_code }}</span>
+                                    <span class="badge {{ $finalDeliveryAssignment->earnings_status === 'credited' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning-emphasis' }}">
+                                        Earning: {{ ucfirst($finalDeliveryAssignment->earnings_status ?? 'pending') }}
+                                    </span>
+                                @endif
                             </div>
                             <div style="font-size: 0.78rem; color: #475569;">
                                 Assigned: <span id="cardFinalAssignedAt" class="fw-semibold" style="color: #171717;">{{ $finalDeliveryAssignment?->assigned_at?->format('d M Y, H:i') ?? '-' }}</span>
@@ -1715,6 +1775,58 @@
 
                         <div id="cardFinalEmpty" class="{{ $finalDeliveryAssignment ? 'd-none' : '' }} small py-2" style="color: #475569;">
                             {{ $finalDeliveryStageReached ? 'Not assigned yet.' : 'Pending until Delivery Man Assigned for Store Pickup.' }}
+                        </div>
+
+                        @php
+                            $admPickupReq = $booking->latestStorePickupRequest;
+                            $admCompletedStages = $booking->getCompletedOperationalStatuses();
+                            $admStoreDone = in_array(\App\Models\Booking::STATUS_STORE_COMPLETE, $admCompletedStages, true);
+                            $admOnDelivery = in_array(\App\Models\Booking::STATUS_ON_DELIVERY, $admCompletedStages, true) || $booking->booking_status === \App\Models\Booking::STATUS_ON_DELIVERY;
+                            $admDeliveredDone = $booking->booking_status === \App\Models\Booking::STATUS_COMPLETED && in_array(\App\Models\Booking::STATUS_COMPLETED, $admCompletedStages, true);
+                        @endphp
+                        <div class="mt-2 pt-2 border-top" style="border-color: rgba(14, 116, 144, 0.15) !important; font-size: 0.74rem;">
+                            <div class="fw-semibold text-dark mb-1">Store Pickup &amp; Delivery Sub-Status</div>
+                            <div class="d-flex flex-wrap gap-1">
+                                <span class="badge {{ $admStoreDone ? 'bg-success-subtle text-success' : 'bg-light text-muted border' }}">
+                                    Store Complete {{ $admStoreDone ? '✓' : '' }}
+                                </span>
+                                <span class="badge {{ $finalDeliveryAssignment ? 'bg-success-subtle text-success' : 'bg-light text-muted border' }}">
+                                    Final Delivery Person Assigned {{ $finalDeliveryAssignment ? '✓' : '' }}
+                                </span>
+                                @if($admPickupReq)
+                                    @if($admPickupReq->status === \App\Models\BookingStorePickupRequest::STATUS_DECLINED)
+                                        <span class="badge bg-danger-subtle text-danger">
+                                            Pickup Declined ({{ $admPickupReq->declined_at?->format('d M H:i') }})
+                                        </span>
+                                    @else
+                                        <span class="badge bg-success-subtle text-success">
+                                            Store Pickup Request Sent ✓
+                                        </span>
+                                        <span class="badge {{ $admPickupReq->accepted_at ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning-emphasis' }}">
+                                            {{ $admPickupReq->accepted_at ? 'Request Accepted ✓' : 'Pending Acceptance' }}
+                                        </span>
+                                        <span class="badge {{ $admPickupReq->collected_at ? 'bg-success-subtle text-success' : 'bg-light text-muted border' }}">
+                                            Collected From Store {{ $admPickupReq->collected_at ? '✓' : '' }}
+                                        </span>
+                                    @endif
+                                @endif
+                                <span class="badge {{ $admOnDelivery ? 'bg-success-subtle text-success' : 'bg-light text-muted border' }}">
+                                    On Delivery {{ $admOnDelivery ? '✓' : '' }}
+                                </span>
+                                <span class="badge {{ $admDeliveredDone ? 'bg-success-subtle text-success' : 'bg-light text-muted border' }}">
+                                    Delivered &amp; Completed {{ $admDeliveredDone ? '✓' : '' }}
+                                </span>
+                            </div>
+                            @if($admPickupReq)
+                                <div class="text-muted mt-1">
+                                    Ref: {{ $admPickupReq->request_reference }}
+                                    @if($admPickupReq->requested_at) &bull; Req: {{ $admPickupReq->requested_at->format('d M H:i') }} @endif
+                                    @if($admPickupReq->accepted_at) &bull; Acc: {{ $admPickupReq->accepted_at->format('d M H:i') }} @endif
+                                    @if($admPickupReq->collected_at) &bull; Col: {{ $admPickupReq->collected_at->format('d M H:i') }} @endif
+                                    @if($admPickupReq->delivered_at) &bull; Del: {{ $admPickupReq->delivered_at->format('d M H:i') }} @endif
+                                    @if($admPickupReq->decline_reason) <div class="text-danger">Decline reason: {{ $admPickupReq->decline_reason }}</div> @endif
+                                </div>
+                            @endif
                         </div>
                     </div>
 
@@ -2339,7 +2451,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function refreshProfitSummaryCard(p) {
         if (!p || !$('#bookingProfitSummaryCard').length) return;
-        const canShow = !!(p.is_finalized || p.has_provisional_estimate);
+        const canShow = !!(p.is_finalized || p.has_provisional_estimate || p.has_any_financial_data);
         $('#profitSummaryStatusBadge')
             .text(p.status_label || '')
             .removeClass('bg-success-subtle text-success bg-primary-subtle text-primary bg-warning-subtle text-warning bg-secondary-subtle text-secondary')
@@ -2348,8 +2460,28 @@ document.addEventListener('DOMContentLoaded', function () {
         $('#profitBreakdownContent').toggleClass('d-none', !canShow);
         if (!canShow || !p.formatted) return;
 
+        const missing = Array.isArray(p.missing_components) ? p.missing_components : [];
+        $('#profitKpiRevenue').text(p.formatted.recognized_net_revenue);
+        $('#profitKpiDirectCosts').text(p.formatted.total_direct_costs || '0.00');
+        $('#profitKpiCostIncompleteBadge').toggleClass('d-none', missing.length === 0);
+        $('#profitKpiMargin').text(p.margin_percentage_formatted || 'N/A');
+
+        const isPos = (p.total_profit_minor || 0) >= 0;
+        $('#profitKpiContribution').text(p.formatted.total_profit).css('color', isPos ? '#16A34A' : '#EF4444');
+        $('#profitMissingNotice').toggleClass('d-none', missing.length === 0);
+        if (missing.length > 0) {
+            const $ul = $('#profitMissingList').empty();
+            missing.forEach(function (msg) {
+                $ul.append($('<li></li>').text(msg));
+            });
+        }
+
         $('#profitEligibleService').text(p.formatted.eligible_service_revenue);
-        $('#profitStoreNet').text('-' + p.formatted.store_net_earnings);
+        if (p.has_store_basis) {
+            $('#profitStoreNet').text('-' + p.formatted.store_net_earnings).removeClass('text-warning-emphasis').addClass('text-danger');
+        } else {
+            $('#profitStoreNet').text('Not recorded').removeClass('text-danger').addClass('text-warning-emphasis');
+        }
         $('#profitStoreContribution').text(p.formatted.store_contribution)
             .toggleClass('text-success', p.store_contribution_minor >= 0)
             .toggleClass('text-danger', p.store_contribution_minor < 0);
@@ -2369,7 +2501,6 @@ document.addEventListener('DOMContentLoaded', function () {
         $('#profitRecognizedRevenue').text(p.formatted.recognized_net_revenue);
         $('#profitMarginPctValue').text(p.margin_percentage_formatted || 'N/A');
 
-        const isPos = (p.total_profit_minor || 0) >= 0;
         $('#profitTotalBox').css({
             'background-color': isPos ? '#ECFDF5' : '#FFF1F2',
             'border-color': isPos ? '#A7F3D0' : '#FECACA'

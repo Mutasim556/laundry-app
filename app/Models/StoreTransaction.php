@@ -15,6 +15,8 @@ class StoreTransaction extends Model
     public const TYPE_POSITIVE_ADJUSTMENT = 'positive_adjustment';
     public const TYPE_NEGATIVE_ADJUSTMENT = 'negative_adjustment';
     public const TYPE_REVERSAL = 'reversal';
+    public const TYPE_WITHDRAWAL_RESERVATION = 'withdrawal_reservation';
+    public const TYPE_WITHDRAWAL_RELEASE = 'withdrawal_release';
 
     public const DIRECTION_CREDIT = 'credit';
     public const DIRECTION_DEBIT = 'debit';

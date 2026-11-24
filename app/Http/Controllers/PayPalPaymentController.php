@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Models\BookingCustomerPayment;
+use App\Services\CollectionPaymentService;
 use App\Services\PayPalPaymentService;
+use App\Services\StoreAccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,7 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class PayPalPaymentController extends Controller
 {
-    public function __construct(protected PayPalPaymentService $paypal) {}
+    public function __construct(
+        protected PayPalPaymentService $paypal,
+        protected CollectionPaymentService $collectionPaymentService
+    ) {}
 
     public function createOrder(Request $request, Booking $booking): JsonResponse
     {
@@ -59,21 +65,56 @@ class PayPalPaymentController extends Controller
 
     public function captureReturn(Request $request, Booking $booking): RedirectResponse|JsonResponse
     {
-        $orderId = (string) ($request->query('token') ?: $booking->paypal_order_id);
+        $orderId = trim((string) ($request->query('token') ?: $booking->paypal_order_id));
         if ($orderId === '') {
-            return redirect()->route('booking.confirm')->with('error', 'Missing PayPal order token.');
+            return redirect()->route('orders.show', $booking->reference)
+                ->with('error', 'Missing PayPal order token.');
+        }
+
+        if (! empty($booking->paypal_order_id) && $booking->paypal_order_id !== $orderId) {
+            return redirect()->route('orders.show', $booking->reference)
+                ->with('error', 'PayPal order token does not match this booking.');
+        }
+
+        $alreadyConfirmed = BookingCustomerPayment::query()
+            ->where('booking_id', $booking->id)
+            ->where('payment_method', BookingCustomerPayment::METHOD_PAYPAL)
+            ->where('external_reference', $orderId)
+            ->where('status', BookingCustomerPayment::STATUS_CONFIRMED)
+            ->exists();
+
+        if ($alreadyConfirmed) {
+            if ($request->expectsJson()) {
+                return response()->json(['status' => $booking->payment_status, 'order_id' => $orderId]);
+            }
+
+            return redirect()->route('orders.show', $booking->reference)
+                ->with('success', 'PayPal payment already confirmed.');
         }
 
         try {
             $capture = $this->paypal->captureOrder($orderId);
 
             if (strtoupper((string) ($capture['status'] ?? '')) === 'COMPLETED') {
-                $booking->update([
+                $booking->forceFill([
                     'paypal_order_id' => $capture['order_id'],
                     'paypal_capture_id' => $capture['capture_id'],
-                    'payment_status' => 'paid',
-                    'paid_at' => now(),
-                ]);
+                ])->save();
+
+                $amountMinor = ! empty($capture['amount_value'])
+                    ? StoreAccountService::decimalToMinor($capture['amount_value'])
+                    : (int) ($booking->final_amount_minor ?? $booking->estimated_amount_minor ?? 0);
+                $currency = strtoupper((string) ($capture['currency_code'] ?: $booking->currency ?: 'GBP'));
+
+                $this->collectionPaymentService->recordVerifiedGatewayPayment(
+                    $booking,
+                    BookingCustomerPayment::METHOD_PAYPAL,
+                    $capture['order_id'],
+                    $amountMinor,
+                    $currency,
+                    'PayPal capture ID: ' . ($capture['capture_id'] ?? 'n/a')
+                );
+                $booking->refresh();
             }
 
             if ($request->expectsJson()) {
@@ -84,7 +125,8 @@ class PayPalPaymentController extends Controller
                 ]);
             }
 
-            return redirect()->route('booking.confirm')->with('success', 'PayPal payment completed.');
+            return redirect()->route('orders.show', $booking->reference)
+                ->with('success', 'PayPal payment completed.');
         } catch (\Throwable $e) {
             Log::error('PayPal capture failed', [
                 'booking_id' => $booking->id,
@@ -96,7 +138,8 @@ class PayPalPaymentController extends Controller
                 return response()->json(['message' => 'Unable to capture PayPal payment.'], 500);
             }
 
-            return redirect()->route('booking.confirm')->with('error', 'Unable to capture PayPal payment.');
+            return redirect()->route('orders.show', $booking->reference)
+                ->with('error', 'Unable to capture PayPal payment.');
         }
     }
 
@@ -118,15 +161,34 @@ class PayPalPaymentController extends Controller
             $booking = Booking::where('paypal_order_id', $orderId)->first();
             if ($booking) {
                 if ($eventType === 'PAYMENT.CAPTURE.COMPLETED') {
-                    $booking->update([
-                        'paypal_capture_id' => (string) ($resource['id'] ?? $booking->paypal_capture_id),
-                        'payment_status' => 'paid',
-                        'paid_at' => $booking->paid_at ?? now(),
-                    ]);
+                    $captureId = (string) ($resource['id'] ?? $booking->paypal_capture_id ?? '');
+                    if ($captureId !== '') {
+                        $booking->forceFill(['paypal_capture_id' => $captureId])->save();
+                    }
+                    $amountVal = data_get($resource, 'amount.value');
+                    $amountMinor = $amountVal !== null
+                        ? StoreAccountService::decimalToMinor((string) $amountVal)
+                        : (int) ($booking->final_amount_minor ?? $booking->estimated_amount_minor ?? 0);
+                    $currency = strtoupper((string) data_get($resource, 'amount.currency_code', $booking->currency ?: 'GBP'));
+
+                    if ($amountMinor > 0) {
+                        $this->collectionPaymentService->recordVerifiedGatewayPayment(
+                            $booking,
+                            BookingCustomerPayment::METHOD_PAYPAL,
+                            $orderId,
+                            $amountMinor,
+                            $currency,
+                            'Verified via PayPal webhook (capture ' . $captureId . ')',
+                            (string) ($payload['id'] ?? '')
+                        );
+                    }
                 } elseif (in_array($eventType, ['PAYMENT.CAPTURE.DENIED', 'PAYMENT.CAPTURE.DECLINED'], true)) {
-                    $booking->update([
-                        'payment_status' => 'failed',
-                    ]);
+                    $this->collectionPaymentService->markGatewayPaymentFailed(
+                        $booking,
+                        BookingCustomerPayment::METHOD_PAYPAL,
+                        $orderId,
+                        'PayPal capture ' . strtolower(str_replace('PAYMENT.CAPTURE.', '', $eventType))
+                    );
                 }
             }
         }

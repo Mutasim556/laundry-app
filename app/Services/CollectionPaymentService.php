@@ -7,6 +7,7 @@ use App\Models\BookingAuditLog;
 use App\Models\BookingCustomerPayment;
 use App\Models\DeliveryPersonCashTransaction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Modules\Admin\Models\DeliveryPerson;
 use RuntimeException;
@@ -49,7 +50,7 @@ class CollectionPaymentService
         $totalConfirmedMinor = max($confirmedPaymentsMinor, $preExistingPaidMinor);
         $outstandingMinor = max(0, $totalMinor - $totalConfirmedMinor);
 
-        $isPaymentSatisfied = $outstandingMinor === 0
+        $isPaymentSatisfied = ((bool) $pricing['is_pricing_complete'] && $outstandingMinor === 0)
             || in_array((string) $booking->payment_status, ['paid', 'authorized', 'authorized_for_later_charge'], true);
 
         return [
@@ -313,8 +314,26 @@ class CollectionPaymentService
 
     public function initiatePayPalOrder(Booking $booking, DeliveryPerson $person): array
     {
+        throw new RuntimeException('Online payments must be completed by the customer on their own account.');
+    }
+
+    public function initiateStripeSession(Booking $booking, DeliveryPerson $person): array
+    {
+        throw new RuntimeException('Online payments must be completed by the customer on their own account.');
+    }
+
+    public function initiateCustomerPayPalOrder(Booking $booking): array
+    {
+        if ($booking->cancelled_at !== null || $booking->booking_status === Booking::STATUS_CANCELLED) {
+            throw new RuntimeException('Cancelled bookings cannot be paid.');
+        }
+
         if ($booking->collection_otp_verified_at === null) {
             throw new RuntimeException('Collection OTP must be verified before initiating PayPal payment.');
+        }
+
+        if (strtolower((string) $booking->payment_gateway) !== 'paypal') {
+            throw new RuntimeException('PayPal is not available because this booking uses a different payment method.');
         }
 
         if (! $this->paypalService->isActive()) {
@@ -322,33 +341,72 @@ class CollectionPaymentService
         }
 
         $state = $this->getPaymentState($booking);
+        if (! $state['is_pricing_complete']) {
+            throw new RuntimeException('Awaiting Final Amount. Operational pricing must be completed before paying.');
+        }
         if ($state['outstanding_minor'] <= 0) {
             throw new RuntimeException('This booking has no outstanding balance.');
         }
 
+        $returnUrl = URL::temporarySignedRoute('booking.paypal.capture', now()->addHours(2), ['booking' => $booking->id]);
+        $cancelUrl = route('orders.show', $booking->reference);
+
         $result = $this->paypalService->createOrder(
             $booking,
-            route('booking.paypal.capture', ['booking' => $booking->id]),
-            route('delivery-person.bookings.show', $booking)
+            $returnUrl,
+            $cancelUrl,
+            $state['outstanding_minor'],
+            $state['currency']
         );
 
         if (! empty($result['order_id'])) {
-            $booking->forceFill([
-                'paypal_order_id' => $result['order_id'],
-                'customer_payment_channel' => 'paypal',
-            ])->save();
+            DB::transaction(function () use ($booking, $state, $result) {
+                $booking->forceFill([
+                    'paypal_order_id' => $result['order_id'],
+                    'customer_payment_channel' => 'paypal',
+                    'last_payment_error' => null,
+                ])->save();
+
+                BookingCustomerPayment::query()->updateOrCreate(
+                    [
+                        'booking_id' => $booking->id,
+                        'payment_method' => BookingCustomerPayment::METHOD_PAYPAL,
+                        'external_reference' => $result['order_id'],
+                    ],
+                    [
+                        'delivery_person_id' => null,
+                        'payment_channel' => BookingCustomerPayment::CHANNEL_GATEWAY,
+                        'amount_minor' => $state['outstanding_minor'],
+                        'currency' => $state['currency'],
+                        'status' => BookingCustomerPayment::STATUS_PENDING,
+                        'idempotency_key' => 'paypal-order:' . $booking->id . ':' . $result['order_id'],
+                        'notes' => 'PayPal order initiated by customer',
+                    ]
+                );
+            });
         }
 
         return $result;
     }
 
-    public function initiateStripeSession(Booking $booking, DeliveryPerson $person): array
+    public function initiateCustomerStripeCheckout(Booking $booking): array
     {
+        if ($booking->cancelled_at !== null || $booking->booking_status === Booking::STATUS_CANCELLED) {
+            throw new RuntimeException('Cancelled bookings cannot be paid.');
+        }
+
         if ($booking->collection_otp_verified_at === null) {
             throw new RuntimeException('Collection OTP must be verified before initiating Stripe payment.');
         }
 
+        if (strtolower((string) $booking->payment_gateway) !== 'stripe') {
+            throw new RuntimeException('Stripe is not available because this booking uses a different payment method.');
+        }
+
         $state = $this->getPaymentState($booking);
+        if (! $state['is_pricing_complete']) {
+            throw new RuntimeException('Awaiting Final Amount. Operational pricing must be completed before paying.');
+        }
         if ($state['outstanding_minor'] <= 0) {
             throw new RuntimeException('This booking has no outstanding balance.');
         }
@@ -358,18 +416,374 @@ class CollectionPaymentService
         }
 
         $booking->loadMissing('user');
-        $intent = $this->stripeService->createPaymentIntent(
+        $successUrl = URL::temporarySignedRoute('booking.stripe.return', now()->addHours(2), ['booking' => $booking->id])
+            . '&session_id={CHECKOUT_SESSION_ID}';
+        $cancelUrl = URL::temporarySignedRoute('booking.stripe.cancel', now()->addHours(2), ['booking' => $booking->id]);
+
+        $idempotencyKey = 'cust-stripe-cs-' . $booking->id . '-' . $state['outstanding_minor'] . '-' . now()->format('YmdHi');
+        $session = $this->stripeService->createCheckoutSession(
+            booking: $booking,
             amountMinor: $state['outstanding_minor'],
             currency: $state['currency'],
-            booking: $booking
+            successUrl: $successUrl,
+            cancelUrl: $cancelUrl,
+            idempotencyKey: $idempotencyKey
         );
 
-        $booking->forceFill([
-            'stripe_payment_intent_id' => $intent['id'] ?? $booking->stripe_payment_intent_id,
-            'customer_payment_channel' => 'stripe',
+        DB::transaction(function () use ($booking, $state, $session) {
+            $booking->forceFill([
+                'stripe_payment_intent_id' => $session['payment_intent_id'] ?: $booking->stripe_payment_intent_id,
+                'customer_payment_channel' => 'stripe',
+                'last_payment_error' => null,
+            ])->save();
+
+            BookingCustomerPayment::query()->updateOrCreate(
+                [
+                    'booking_id' => $booking->id,
+                    'payment_method' => BookingCustomerPayment::METHOD_STRIPE,
+                    'external_reference' => $session['session_id'],
+                ],
+                [
+                    'delivery_person_id' => null,
+                    'payment_channel' => BookingCustomerPayment::CHANNEL_GATEWAY,
+                    'amount_minor' => $state['outstanding_minor'],
+                    'currency' => $state['currency'],
+                    'status' => BookingCustomerPayment::STATUS_PENDING,
+                    'idempotency_key' => 'stripe-cs:' . $booking->id . ':' . $session['session_id'],
+                    'notes' => 'Stripe Checkout Session initiated by customer',
+                ]
+            );
+        });
+
+        return $session;
+    }
+
+    /**
+     * Create or safely reuse a Stripe PaymentIntent for on-page customer payment (no Checkout redirect).
+     *
+     * @return array{publishable_key: string, client_secret: string, payment_intent_id: string, amount_minor: int, currency: string}
+     */
+    public function initiateCustomerStripePaymentIntent(Booking $booking): array
+    {
+        if ($booking->cancelled_at !== null || $booking->booking_status === Booking::STATUS_CANCELLED) {
+            throw new RuntimeException('Cancelled bookings cannot be paid.');
+        }
+
+        if ($booking->collection_otp_verified_at === null) {
+            throw new RuntimeException('Online payment will be available after OTP verification.');
+        }
+
+        if (strtolower((string) $booking->payment_gateway) !== 'stripe') {
+            throw new RuntimeException('Stripe is not available because this booking uses a different payment method.');
+        }
+
+        $state = $this->getPaymentState($booking);
+        if (! $state['is_pricing_complete']) {
+            throw new RuntimeException('Awaiting Final Amount.');
+        }
+        if ($state['is_payment_satisfied'] || $state['outstanding_minor'] <= 0) {
+            throw new RuntimeException('Payment Completed.');
+        }
+
+        if (! $this->stripeService->isActive()) {
+            throw new RuntimeException('Stripe is currently unavailable in payment settings.');
+        }
+
+        $publishableKey = (string) ($this->stripeService->publishableKey() ?? '');
+        if ($publishableKey === '') {
+            throw new RuntimeException('Stripe publishable key is not configured.');
+        }
+
+        $amountMinor = (int) $state['outstanding_minor'];
+        $currency = strtoupper((string) $state['currency']);
+        $intentData = null;
+
+        // Safely reuse existing pending PaymentIntent if amount, currency, and status still match
+        if (! empty($booking->stripe_payment_intent_id)) {
+            try {
+                $existing = $this->stripeService->retrievePaymentIntent((string) $booking->stripe_payment_intent_id);
+                $existingStatus = (string) ($existing->status ?? '');
+                $existingAmount = (int) ($existing->amount ?? 0);
+                $existingCurrency = strtoupper((string) ($existing->currency ?? ''));
+
+                if (in_array($existingStatus, ['requires_payment_method', 'requires_confirmation', 'requires_action'], true)
+                    && $existingAmount === $amountMinor
+                    && $existingCurrency === $currency
+                    && ! empty($existing->client_secret)) {
+                    $intentData = [
+                        'id' => (string) $existing->id,
+                        'client_secret' => (string) $existing->client_secret,
+                        'status' => $existingStatus,
+                        'amount_minor' => $existingAmount,
+                        'currency' => $existingCurrency,
+                    ];
+                }
+            } catch (\Throwable) {
+                // Fall through to creating a fresh PaymentIntent
+            }
+        }
+
+        if (! $intentData) {
+            $idempotencyKey = 'cust-pi-' . $booking->id . '-' . $amountMinor . '-' . now()->format('YmdHi');
+            $intentData = $this->stripeService->createPaymentIntent(
+                amountMinor: $amountMinor,
+                currency: $currency,
+                booking: $booking,
+                idempotencyKey: $idempotencyKey
+            );
+        }
+
+        DB::transaction(function () use ($booking, $amountMinor, $currency, $intentData) {
+            $booking->forceFill([
+                'stripe_payment_intent_id' => $intentData['id'],
+                'customer_payment_channel' => 'stripe',
+                'last_payment_error' => null,
+            ])->save();
+
+            BookingCustomerPayment::query()->updateOrCreate(
+                [
+                    'booking_id' => $booking->id,
+                    'payment_method' => BookingCustomerPayment::METHOD_STRIPE,
+                    'external_reference' => $intentData['id'],
+                ],
+                [
+                    'delivery_person_id' => null,
+                    'payment_channel' => BookingCustomerPayment::CHANNEL_GATEWAY,
+                    'amount_minor' => $amountMinor,
+                    'currency' => $currency,
+                    'status' => BookingCustomerPayment::STATUS_PENDING,
+                    'idempotency_key' => 'stripe-pi:' . $booking->id . ':' . $intentData['id'],
+                    'notes' => 'Stripe PaymentIntent initiated on-page by customer',
+                ]
+            );
+        });
+
+        return [
+            'publishable_key' => $publishableKey,
+            'client_secret' => $intentData['client_secret'],
+            'payment_intent_id' => $intentData['id'],
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+        ];
+    }
+
+    public function recordVerifiedGatewayPayment(
+        Booking $booking,
+        string $method,
+        string $externalReference,
+        int $amountMinor,
+        string $currency,
+        string $notes = '',
+        ?string $webhookEventId = null
+    ): BookingCustomerPayment {
+        if ($amountMinor <= 0) {
+            throw new RuntimeException('Verified payment amount must be greater than zero.');
+        }
+
+        $payment = DB::transaction(function () use ($booking, $method, $externalReference, $amountMinor, $currency, $notes, $webhookEventId) {
+            /** @var Booking $locked */
+            $locked = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+
+            $bookingCurrency = strtoupper((string) ($locked->currency ?: $this->currencyService->code()));
+            if (strtoupper($currency) !== $bookingCurrency) {
+                throw new RuntimeException("Payment currency {$currency} does not match booking currency {$bookingCurrency}.");
+            }
+
+            $alreadyConfirmed = BookingCustomerPayment::query()
+                ->where('booking_id', $locked->id)
+                ->where('payment_method', $method)
+                ->where('external_reference', $externalReference)
+                ->where('status', BookingCustomerPayment::STATUS_CONFIRMED)
+                ->first();
+
+            if ($alreadyConfirmed) {
+                return $alreadyConfirmed;
+            }
+
+            $now = now();
+            $pending = BookingCustomerPayment::query()
+                ->where('booking_id', $locked->id)
+                ->where('payment_method', $method)
+                ->where('external_reference', $externalReference)
+                ->first();
+
+            if ($pending) {
+                $pending->forceFill([
+                    'amount_minor' => $amountMinor,
+                    'currency' => $bookingCurrency,
+                    'status' => BookingCustomerPayment::STATUS_CONFIRMED,
+                    'collected_at' => $pending->collected_at ?? $now,
+                    'verified_at' => $now,
+                    'notes' => trim(($pending->notes ? $pending->notes . ' | ' : '') . $notes),
+                ])->save();
+                $payment = $pending;
+            } else {
+                $payment = BookingCustomerPayment::query()->create([
+                    'booking_id' => $locked->id,
+                    'payment_method' => $method,
+                    'payment_channel' => BookingCustomerPayment::CHANNEL_GATEWAY,
+                    'amount_minor' => $amountMinor,
+                    'currency' => $bookingCurrency,
+                    'status' => BookingCustomerPayment::STATUS_CONFIRMED,
+                    'external_reference' => $externalReference,
+                    'idempotency_key' => $method . '-confirmed:' . $locked->id . ':' . $externalReference,
+                    'notes' => $notes ?: null,
+                    'collected_at' => $now,
+                    'verified_at' => $now,
+                ]);
+            }
+
+            $state = $this->getPaymentState($locked);
+            $newStatus = $state['outstanding_minor'] === 0 ? 'paid' : 'partially_paid';
+
+            $locked->forceFill([
+                'customer_payment_channel' => $method,
+                'payment_status' => $newStatus,
+                'paid_at' => $newStatus === 'paid' ? ($locked->paid_at ?: $now) : $locked->paid_at,
+                'last_payment_error' => null,
+            ])->save();
+
+            BookingAuditLog::create([
+                'booking_id' => $locked->id,
+                'actor_type' => 'system',
+                'actor_id' => null,
+                'actor_name' => strtoupper($method) . ' Gateway',
+                'action' => 'customer_gateway_payment_confirmed',
+                'summary' => sprintf(
+                    'Verified %s payment %s (%s) for booking %s.',
+                    strtoupper($method),
+                    $this->currencyService->formatMinor($amountMinor, $bookingCurrency),
+                    $externalReference,
+                    $locked->reference
+                ),
+                'changes' => [
+                    'payment_id' => $payment->id,
+                    'payment_method' => $method,
+                    'external_reference' => $externalReference,
+                    'amount_minor' => $amountMinor,
+                    'currency' => $bookingCurrency,
+                    'outstanding_minor' => $state['outstanding_minor'],
+                    'new_payment_status' => $newStatus,
+                    'webhook_event_id' => $webhookEventId,
+                ],
+            ]);
+
+            $this->autoFinalizeAfterVerifiedPayment($locked, $state);
+
+            return $payment;
+        });
+
+        if ($method === BookingCustomerPayment::METHOD_STRIPE) {
+            try {
+                app(StripeFeeReconciliationService::class)->reconcilePayment($payment);
+            } catch (\Throwable) {
+                // Non-blocking: deferred to manual or scheduled reconciliation
+            }
+        }
+
+        return $payment;
+    }
+
+    /**
+     * Automatically advance booking through the Finalized stage once verified online payment
+     * satisfies the balance and all operational prerequisites are met (idempotent).
+     *
+     * @param  array<string, mixed>  $state
+     */
+    protected function autoFinalizeAfterVerifiedPayment(Booking $locked, array $state): void
+    {
+        if ($locked->cancelled_at !== null || $locked->booking_status === Booking::STATUS_CANCELLED) {
+            return;
+        }
+
+        if ($locked->collection_otp_verified_at === null) {
+            return;
+        }
+
+        if (empty($state['is_pricing_complete']) || empty($state['is_payment_satisfied'])) {
+            return;
+        }
+
+        $stages = is_array($locked->completed_operational_stages) ? $locked->completed_operational_stages : [];
+        if (isset($stages[Booking::STATUS_FINALIZED])) {
+            return;
+        }
+
+        if (! in_array($locked->booking_status, [Booking::STATUS_DELIVERY_MAN_ASSIGNED, Booking::STATUS_FINALIZED], true)) {
+            return;
+        }
+
+        $nowIso = now()->toIso8601String();
+        if ($locked->booking_status === Booking::STATUS_DELIVERY_MAN_ASSIGNED && ! isset($stages[Booking::STATUS_DELIVERY_MAN_ASSIGNED])) {
+            $stages[Booking::STATUS_DELIVERY_MAN_ASSIGNED] = [
+                'completed_at' => $nowIso,
+                'auto_completed' => true,
+            ];
+        }
+
+        $stages[Booking::STATUS_FINALIZED] = [
+            'completed_at' => $nowIso,
+            'auto_finalized_after_payment' => true,
+        ];
+
+        $finalTotalMinor = (int) ($state['pricing']['final_total_minor'] ?? $state['total_minor']);
+
+        $locked->forceFill([
+            'completed_operational_stages' => $stages,
+            'final_amount_minor' => $finalTotalMinor,
+            'booking_status' => Booking::STATUS_DELIVERY_MAN_PICKED_UP,
+            'version' => ((int) $locked->version) + 1,
         ])->save();
 
-        return $intent;
+        $this->storeEarningsService->getOrCreateSnapshotForBooking($locked, null);
+
+        BookingAuditLog::create([
+            'booking_id' => $locked->id,
+            'actor_type' => 'system',
+            'actor_id' => null,
+            'actor_name' => 'Payment Auto-Finalizer',
+            'action' => 'collection_auto_finalized_after_online_payment',
+            'summary' => sprintf(
+                'Booking %s automatically finalized after verified online payment (%s).',
+                $locked->reference,
+                $this->currencyService->formatMinor($finalTotalMinor, $state['currency'])
+            ),
+            'changes' => [
+                'final_amount_minor' => $finalTotalMinor,
+                'new_status' => Booking::STATUS_DELIVERY_MAN_PICKED_UP,
+            ],
+        ]);
+    }
+
+    public function markGatewayPaymentFailed(Booking $booking, string $method, ?string $externalReference, string $reason): void
+    {
+        DB::transaction(function () use ($booking, $method, $externalReference, $reason) {
+            /** @var Booking $locked */
+            $locked = Booking::query()->whereKey($booking->id)->lockForUpdate()->firstOrFail();
+
+            if ($externalReference) {
+                BookingCustomerPayment::query()
+                    ->where('booking_id', $locked->id)
+                    ->where('payment_method', $method)
+                    ->where('external_reference', $externalReference)
+                    ->where('status', BookingCustomerPayment::STATUS_PENDING)
+                    ->update([
+                        'status' => BookingCustomerPayment::STATUS_FAILED,
+                        'notes' => $reason,
+                    ]);
+            }
+
+            if (! in_array((string) $locked->payment_status, ['paid', 'partially_paid'], true)) {
+                $locked->forceFill([
+                    'payment_status' => 'failed',
+                    'last_payment_error' => $reason,
+                ])->save();
+            } else {
+                $locked->forceFill([
+                    'last_payment_error' => $reason,
+                ])->save();
+            }
+        });
     }
 
     public function finalizeCollectionBooking(Booking $booking, DeliveryPerson $person): Booking

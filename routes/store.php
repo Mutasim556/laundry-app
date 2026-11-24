@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\StorePortal\StoreAuthController;
+use App\Http\Controllers\StorePortal\StoreBankAccountController;
 use App\Http\Controllers\StorePortal\StoreDashboardController;
+use App\Http\Controllers\StorePortal\StoreWithdrawalController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest:store')->group(function () {
@@ -20,12 +22,26 @@ Route::middleware(['auth:store', 'store.active'])->group(function () {
     Route::get('/dashboard', [StoreDashboardController::class, 'dashboard'])->name('dashboard');
     Route::get('/bookings', [StoreDashboardController::class, 'bookings'])->name('bookings.index');
     Route::get('/bookings/{booking}', [StoreDashboardController::class, 'showBooking'])->name('bookings.show');
+    Route::post('/bookings/{booking}/mark-complete', [StoreDashboardController::class, 'markStoreComplete'])->name('bookings.mark-complete');
+    Route::post('/bookings/{booking}/pickup-request', [StoreDashboardController::class, 'requestStorePickup'])->name('bookings.pickup-request');
     Route::get('/handovers', [StoreDashboardController::class, 'handovers'])->name('handovers.index');
     Route::post('/handovers/{handover}/accept', [StoreDashboardController::class, 'acceptHandover'])->name('handovers.accept');
     Route::post('/handovers/{handover}/reject', [StoreDashboardController::class, 'rejectHandover'])->name('handovers.reject');
     Route::get('/earnings', [StoreDashboardController::class, 'earnings'])->name('earnings.index');
     Route::get('/account', [StoreDashboardController::class, 'account'])->name('account.index');
     Route::get('/profile', [StoreDashboardController::class, 'profile'])->name('profile.show');
+
+    // Store Bank Accounts (AJAX)
+    Route::get('/bank-accounts', [StoreBankAccountController::class, 'index'])->name('bank-accounts.index');
+    Route::post('/bank-accounts', [StoreBankAccountController::class, 'store'])->name('bank-accounts.store');
+    Route::put('/bank-accounts/{bankAccount}', [StoreBankAccountController::class, 'update'])->name('bank-accounts.update');
+    Route::post('/bank-accounts/{bankAccount}/default', [StoreBankAccountController::class, 'setDefault'])->name('bank-accounts.default');
+    Route::delete('/bank-accounts/{bankAccount}', [StoreBankAccountController::class, 'destroy'])->name('bank-accounts.destroy');
+
+    // Store Withdrawal Requests (AJAX)
+    Route::get('/withdrawals/modal-data', [StoreWithdrawalController::class, 'modalData'])->name('withdrawals.modal-data');
+    Route::post('/withdrawals', [StoreWithdrawalController::class, 'store'])->name('withdrawals.store');
+    Route::get('/withdrawals/{withdrawal}', [StoreWithdrawalController::class, 'show'])->name('withdrawals.show');
     Route::put('/profile', [StoreDashboardController::class, 'updateProfile'])->name('profile.update');
     Route::get('/change-password', [StoreDashboardController::class, 'showChangePassword'])->name('password.change');
     Route::put('/change-password', [StoreDashboardController::class, 'updatePassword'])->name('password.change.update');

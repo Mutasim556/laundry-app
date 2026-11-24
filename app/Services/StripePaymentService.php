@@ -341,4 +341,246 @@ class StripePaymentService
 
         return Webhook::constructEvent($payload, $signatureHeader, $webhookSecret);
     }
+
+    /**
+     * Create a hosted Stripe Checkout Session for the booking's verified outstanding amount.
+     *
+     * @return array{id: string, session_id: string, checkout_url: string, approve_url: string, payment_intent_id: ?string, status: string, payment_status: string}
+     */
+    public function createCheckoutSession(
+        Booking $booking,
+        int $amountMinor,
+        string $currency,
+        string $successUrl,
+        string $cancelUrl,
+        ?string $idempotencyKey = null
+    ): array {
+        if ($amountMinor <= 0) {
+            throw new \RuntimeException('Stripe Checkout amount must be greater than zero.');
+        }
+
+        $currencyLower = strtolower($currency);
+        $params = [
+            'mode' => 'payment',
+            'success_url' => $successUrl,
+            'cancel_url' => $cancelUrl,
+            'client_reference_id' => (string) $booking->id,
+            'line_items' => [[
+                'quantity' => 1,
+                'price_data' => [
+                    'currency' => $currencyLower,
+                    'unit_amount' => $amountMinor,
+                    'product_data' => [
+                        'name' => 'Laundry Order ' . ($booking->reference ?? $booking->booking_reference ?? ('#' . $booking->id)),
+                    ],
+                ],
+            ]],
+            'metadata' => [
+                'booking_id' => (string) $booking->id,
+                'booking_reference' => (string) ($booking->reference ?? $booking->booking_reference ?? ''),
+                'amount_minor' => (string) $amountMinor,
+                'currency' => strtoupper($currency),
+            ],
+            'payment_intent_data' => [
+                'metadata' => [
+                    'booking_id' => (string) $booking->id,
+                    'booking_reference' => (string) ($booking->reference ?? $booking->booking_reference ?? ''),
+                ],
+            ],
+        ];
+
+        if (! empty($booking->stripe_customer_id)) {
+            $params['customer'] = (string) $booking->stripe_customer_id;
+        } elseif (! empty($booking->customer_email)) {
+            $params['customer_email'] = (string) $booking->customer_email;
+        }
+
+        $opts = $idempotencyKey ? ['idempotency_key' => $idempotencyKey] : [];
+        $session = $this->client()->checkout->sessions->create($params, $opts);
+
+        return [
+            'id' => (string) $session->id,
+            'session_id' => (string) $session->id,
+            'checkout_url' => (string) ($session->url ?? ''),
+            'approve_url' => (string) ($session->url ?? ''),
+            'payment_intent_id' => isset($session->payment_intent) ? (string) $session->payment_intent : null,
+            'status' => (string) ($session->status ?? 'open'),
+            'payment_status' => (string) ($session->payment_status ?? 'unpaid'),
+        ];
+    }
+
+    /**
+     * Retrieve a Stripe Checkout Session from Stripe API to verify its authoritative status.
+     */
+    public function retrieveCheckoutSession(string $sessionId): object
+    {
+        return $this->client()->checkout->sessions->retrieve($sessionId, [
+            'expand' => ['payment_intent'],
+        ]);
+    }
+
+    /**
+     * Create a Stripe PaymentIntent for the booking's verified outstanding amount.
+     *
+     * @return array{id: string, client_secret: string, status: string, amount_minor: int, currency: string}
+     */
+    public function createPaymentIntent(
+        int $amountMinor,
+        string $currency,
+        Booking $booking,
+        ?string $idempotencyKey = null
+    ): array {
+        if ($amountMinor <= 0) {
+            throw new \RuntimeException('Stripe PaymentIntent amount must be greater than zero.');
+        }
+
+        $params = [
+            'amount' => $amountMinor,
+            'currency' => strtolower($currency),
+            'automatic_payment_methods' => [
+                'enabled' => true,
+                'allow_redirects' => 'never',
+            ],
+            'description' => 'Laundry Order ' . ($booking->reference ?? $booking->booking_reference ?? ('#' . $booking->id)),
+            'metadata' => [
+                'booking_id' => (string) $booking->id,
+                'booking_reference' => (string) ($booking->reference ?? $booking->booking_reference ?? ''),
+            ],
+        ];
+
+        if (! empty($booking->stripe_customer_id)) {
+            $params['customer'] = (string) $booking->stripe_customer_id;
+        }
+
+        $opts = $idempotencyKey ? ['idempotency_key' => $idempotencyKey] : [];
+        $intent = $this->client()->paymentIntents->create($params, $opts);
+
+        return [
+            'id' => (string) $intent->id,
+            'client_secret' => (string) ($intent->client_secret ?? ''),
+            'status' => (string) ($intent->status ?? ''),
+            'amount_minor' => (int) ($intent->amount ?? $amountMinor),
+            'currency' => strtoupper((string) ($intent->currency ?? $currency)),
+        ];
+    }
+
+    /**
+     * Retrieve an existing PaymentIntent from Stripe API.
+     */
+    public function retrievePaymentIntent(string $paymentIntentId): object
+    {
+        return $this->client()->paymentIntents->retrieve($paymentIntentId);
+    }
+
+    /**
+     * Retrieve actual Stripe Charge & BalanceTransaction fee details for a PaymentIntent or Checkout Session.
+     *
+     * @return array{
+     *   payment_intent_id: string,
+     *   charge_id: string,
+     *   balance_transaction_id: string,
+     *   amount_minor: int,
+     *   fee_minor: int,
+     *   net_minor: int,
+     *   currency: string,
+     *   fee_details: array<int, array<string, mixed>>
+     * }|null
+     */
+    public function retrieveBalanceTransactionForPaymentReference(string $reference): ?array
+    {
+        $ref = trim($reference);
+        if ($ref === '') {
+            return null;
+        }
+
+        $client = $this->client();
+        $piId = $ref;
+
+        if (str_starts_with($ref, 'cs_')) {
+            $session = $client->checkout->sessions->retrieve($ref);
+            $piId = is_object($session->payment_intent ?? null)
+                ? (string) ($session->payment_intent->id ?? '')
+                : (string) ($session->payment_intent ?? '');
+            if ($piId === '') {
+                return null;
+            }
+        }
+
+        if (! str_starts_with($piId, 'pi_')) {
+            return null;
+        }
+
+        $intent = $client->paymentIntents->retrieve($piId, [
+            'expand' => ['latest_charge.balance_transaction'],
+        ]);
+
+        $charge = $intent->latest_charge ?? null;
+        if (! is_object($charge) || empty($charge->id)) {
+            return null;
+        }
+
+        $bt = $charge->balance_transaction ?? null;
+        if (is_string($bt) && $bt !== '') {
+            $bt = $client->balanceTransactions->retrieve($bt);
+        }
+
+        if (! is_object($bt) || empty($bt->id)) {
+            return null;
+        }
+
+        $feeDetails = [];
+        if (! empty($bt->fee_details) && is_iterable($bt->fee_details)) {
+            foreach ($bt->fee_details as $fd) {
+                $feeDetails[] = [
+                    'type' => (string) ($fd->type ?? ''),
+                    'description' => (string) ($fd->description ?? ''),
+                    'amount' => (int) ($fd->amount ?? 0),
+                    'currency' => strtoupper((string) ($fd->currency ?? $bt->currency ?? '')),
+                ];
+            }
+        }
+
+        return [
+            'payment_intent_id' => (string) $intent->id,
+            'charge_id' => (string) $charge->id,
+            'balance_transaction_id' => (string) $bt->id,
+            'amount_minor' => (int) ($bt->amount ?? 0),
+            'fee_minor' => (int) ($bt->fee ?? 0),
+            'net_minor' => (int) ($bt->net ?? 0),
+            'currency' => strtoupper((string) ($bt->currency ?? '')),
+            'fee_details' => $feeDetails,
+        ];
+    }
+
+    /**
+     * Create a real Stripe refund for a PaymentIntent or Charge with idempotency protection.
+     *
+     * @return array{id: string, status: string, amount_minor: int, currency: string}
+     */
+    public function createRefund(
+        string $paymentIntentOrChargeId,
+        int $amountMinor,
+        string $idempotencyKey,
+        string $reason = 'requested_by_customer'
+    ): array {
+        $params = [
+            'amount' => $amountMinor,
+            'reason' => in_array($reason, ['duplicate', 'fraudulent', 'requested_by_customer'], true) ? $reason : 'requested_by_customer',
+        ];
+
+        if (str_starts_with($paymentIntentOrChargeId, 'ch_')) {
+            $params['charge'] = $paymentIntentOrChargeId;
+        } else {
+            $params['payment_intent'] = $paymentIntentOrChargeId;
+        }
+
+        $refund = $this->client()->refunds->create($params, ['idempotency_key' => $idempotencyKey]);
+
+        return [
+            'id' => (string) $refund->id,
+            'status' => (string) ($refund->status ?? 'pending'),
+            'amount_minor' => (int) ($refund->amount ?? $amountMinor),
+            'currency' => strtoupper((string) ($refund->currency ?? '')),
+        ];
+    }
 }

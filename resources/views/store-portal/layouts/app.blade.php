@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ asset('admin/dist/libs/bootstrap/dist/css/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('admin/dist/css/icons/material-design-iconic-font/css/materialdesignicons.min.css') }}">
+    @stack('styles')
     <style>
         :root {
             --sp-yellow: #FFC629;
@@ -209,6 +210,7 @@
     </div>
 </div>
 
+<script src="{{ asset('admin/dist/libs/jquery/dist/jquery.min.js') }}"></script>
 <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
 <script>
     document.getElementById('btnToggleSpSidebar')?.addEventListener('click', function () {

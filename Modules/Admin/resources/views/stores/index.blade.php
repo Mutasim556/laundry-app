@@ -870,6 +870,7 @@
                 $('#edit_min_order_amount').val(store.min_order_amount ?? 0);
                 $('#edit_delivery_fee').val(store.delivery_fee ?? 0);
                 $('#edit_free_delivery_threshold').val(store.free_delivery_threshold ?? '');
+                $('#edit_commission_rate').val(store.commission_rate ?? '');
                 $('#edit_has_delivery').prop('checked', Boolean(store.has_delivery));
                 $('#edit_is_accepting_orders').prop('checked', Boolean(store.is_accepting_orders));
                 $('#edit_service_areas_text').val(store.service_areas_text || '');

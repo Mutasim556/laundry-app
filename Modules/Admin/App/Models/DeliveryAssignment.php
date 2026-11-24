@@ -130,6 +130,154 @@ class DeliveryAssignment extends Model
         return $this->hasMany(DeliveryAssignmentEvent::class)->orderBy('occurred_at');
     }
 
+    public function pickupRequests(): HasMany
+    {
+        return $this->hasMany(\App\Models\BookingStorePickupRequest::class, 'delivery_assignment_id')->orderByDesc('id');
+    }
+
+    public function latestPickupRequest(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\BookingStorePickupRequest::class, 'delivery_assignment_id')->latest('id');
+    }
+
+    public function ledgerEntries(): HasMany
+    {
+        return $this->hasMany(DeliveryPersonLedgerEntry::class, 'delivery_assignment_id')->orderByDesc('id');
+    }
+
+    public function isCollectionJob(): bool
+    {
+        return $this->assignment_type === self::TYPE_CUSTOMER_COLLECTION;
+    }
+
+    public function isFinalDeliveryJob(): bool
+    {
+        return $this->assignment_type === self::TYPE_FINAL_DELIVERY;
+    }
+
+    public function getJobCodeAttribute(): string
+    {
+        $prefix = $this->isCollectionJob() ? 'COL' : 'DEL';
+
+        return $prefix . '-' . str_pad((string) $this->id, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Resolve independent job-level status label, key, and badge style.
+     *
+     * @return array{key: string, label: string, badge_style: string, pickup_request_label: ?string}
+     */
+    public function getJobStatusDisplay(): array
+    {
+        $booking = $this->booking;
+        $completedStages = $booking ? $booking->getCompletedOperationalStatuses() : [];
+
+        if ($this->isCollectionJob()) {
+            $isDone = in_array($this->status, [self::STATUS_HANDED_OVER, self::STATUS_COMPLETED], true)
+                || in_array(Booking::STATUS_STORE_RECEIVED, $completedStages, true);
+
+            if ($isDone) {
+                return [
+                    'key' => 'completed',
+                    'label' => 'Completed',
+                    'badge_style' => 'background-color: #DCFCE7; color: #15803D; border: 1px solid #86EFAC;',
+                    'pickup_request_label' => null,
+                ];
+            }
+
+            if ($this->status === self::STATUS_PICKED_UP || in_array(Booking::STATUS_DELIVERY_MAN_PICKED_UP, $completedStages, true)) {
+                return [
+                    'key' => 'active',
+                    'label' => 'Picked Up (En Route to Store)',
+                    'badge_style' => 'background-color: #DBEAFE; color: #1D4ED8; border: 1px solid #93C5FD;',
+                    'pickup_request_label' => null,
+                ];
+            }
+
+            return [
+                'key' => 'pending',
+                'label' => 'Pending Customer Collection',
+                'badge_style' => 'background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;',
+                'pickup_request_label' => null,
+            ];
+        }
+
+        // Final Delivery Job
+        $pickupReq = $this->relationLoaded('latestPickupRequest')
+            ? $this->latestPickupRequest
+            : $this->latestPickupRequest()->first();
+
+        $pickupReqLabel = $pickupReq ? $pickupReq->getStatusLabel() : 'Not Sent';
+
+        if (
+            $this->status === self::STATUS_COMPLETED
+            || ($booking && $booking->booking_status === Booking::STATUS_COMPLETED && in_array(Booking::STATUS_COMPLETED, $completedStages, true))
+        ) {
+            return [
+                'key' => 'completed',
+                'label' => 'Completed',
+                'badge_style' => 'background-color: #DCFCE7; color: #15803D; border: 1px solid #86EFAC;',
+                'pickup_request_label' => $pickupReqLabel,
+            ];
+        }
+
+        if (
+            ($booking && $booking->booking_status === Booking::STATUS_ON_DELIVERY)
+            || ($pickupReq && $pickupReq->status === \App\Models\BookingStorePickupRequest::STATUS_COLLECTED)
+            || $this->status === self::STATUS_PICKED_UP
+        ) {
+            return [
+                'key' => 'on_delivery',
+                'label' => 'On Delivery',
+                'badge_style' => 'background-color: #DBEAFE; color: #1D4ED8; border: 1px solid #93C5FD;',
+                'pickup_request_label' => $pickupReqLabel,
+            ];
+        }
+
+        if ($pickupReq && $pickupReq->status === \App\Models\BookingStorePickupRequest::STATUS_ACCEPTED) {
+            return [
+                'key' => 'accepted',
+                'label' => 'Accepted — Ready for Store Pickup',
+                'badge_style' => 'background-color: #DCFCE7; color: #15803D; border: 1px solid #86EFAC;',
+                'pickup_request_label' => $pickupReqLabel,
+            ];
+        }
+
+        if ($pickupReq && $pickupReq->status === \App\Models\BookingStorePickupRequest::STATUS_PENDING) {
+            return [
+                'key' => 'pickup_requested',
+                'label' => 'Pickup Requested',
+                'badge_style' => 'background-color: #FEF3C7; color: #92400E; border: 1px solid #FDE68A;',
+                'pickup_request_label' => $pickupReqLabel,
+            ];
+        }
+
+        if ($pickupReq && $pickupReq->status === \App\Models\BookingStorePickupRequest::STATUS_DECLINED) {
+            return [
+                'key' => 'declined',
+                'label' => 'Declined',
+                'badge_style' => 'background-color: #FEE2E2; color: #B91C1C; border: 1px solid #FECACA;',
+                'pickup_request_label' => $pickupReqLabel,
+            ];
+        }
+
+        if (! in_array(Booking::STATUS_STORE_COMPLETE, $completedStages, true)) {
+            return [
+                'key' => 'awaiting_store',
+                'label' => 'Awaiting Store Completion',
+                'badge_style' => 'background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1;',
+                'pickup_request_label' => $pickupReqLabel,
+            ];
+        }
+
+        return [
+            'key' => 'awaiting_request',
+            'label' => 'Awaiting Pickup Request',
+            'badge_style' => 'background-color: #EDE9FE; color: #6D28D9; border: 1px solid #DDD6FE;',
+            'pickup_request_label' => $pickupReqLabel,
+        ];
+    }
+
     public function getTypeLabelAttribute(): string
     {
         return $this->assignment_type === self::TYPE_CUSTOMER_COLLECTION

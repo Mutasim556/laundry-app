@@ -16,6 +16,8 @@ class DeliveryPersonLedgerEntry extends Model
     public const TYPE_PAYOUT_REVERSAL = 'payout_reversal';
     public const TYPE_EARNING_REVERSAL = 'earning_reversal';
     public const TYPE_AUTHORIZED_CORRECTION = 'authorized_correction';
+    public const TYPE_WITHDRAWAL_RESERVATION = 'withdrawal_reservation';
+    public const TYPE_WITHDRAWAL_RELEASE = 'withdrawal_release';
 
     protected $fillable = [
         'entry_reference',

@@ -152,7 +152,7 @@ class StoreController extends Controller
                 'description' => $store->description ?? '',
                 'verification_notes' => $store->verification_notes ?? '',
                 'commission_type' => $store->commission_type ?? '',
-                'commission_rate' => $store->commission_rate ? (float) $store->commission_rate : null,
+                'commission_rate' => $store->commission_rate !== null ? (float) $store->commission_rate : null,
                 'currency_symbol' => $currencySymbol,
                 'created_at' => $store->created_at ? $store->created_at->format('M d, Y') : 'Not provided',
                 'updated_at' => $store->updated_at ? $store->updated_at->format('M d, Y') : 'Not provided',
@@ -336,6 +336,9 @@ class StoreController extends Controller
         $validated['is_accepting_orders'] = $request->boolean('is_accepting_orders', true);
         $validated['min_order_amount'] = $validated['min_order_amount'] ?? 0;
         $validated['delivery_fee'] = $validated['delivery_fee'] ?? 0;
+        if (isset($validated['commission_rate'])) {
+            $validated['commission_type'] = ! empty($validated['commission_type']) ? $validated['commission_type'] : 'percentage';
+        }
 
         if ($request->hasFile('logo')) {
             $validated['logo'] = $request->file('logo')->store('stores/logos', 'public');
@@ -468,6 +471,9 @@ class StoreController extends Controller
         $validated['is_accepting_orders'] = $request->boolean('is_accepting_orders', true);
         $validated['min_order_amount'] = $validated['min_order_amount'] ?? 0;
         $validated['delivery_fee'] = $validated['delivery_fee'] ?? 0;
+        if (isset($validated['commission_rate'])) {
+            $validated['commission_type'] = ! empty($validated['commission_type']) ? $validated['commission_type'] : 'percentage';
+        }
 
         if ($request->boolean('remove_logo') && $store->logo) {
             \Illuminate\Support\Facades\Storage::disk('public')->delete($store->logo);
