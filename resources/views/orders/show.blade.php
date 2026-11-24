@@ -61,6 +61,7 @@
 
         $payBadgeStyle = match($pricingSummary['payment_status_label']) {
             'Paid' => 'background-color: #D1FAE5; color: #047857;',
+            'Partially Paid' => 'background-color: #DBEAFE; color: #1D4ED8;',
             'Authorized' => 'background-color: #DBEAFE; color: #1D4ED8;',
             'Failed' => 'background-color: #FEE2E2; color: #B91C1C;',
             'Refunded', 'Partially Refunded' => 'background-color: #EDE9FE; color: #6D28D9;',
@@ -92,10 +93,10 @@
                     </p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="{{ $statusStyle }}">
+                    <span id="orderTopStatusBadge" class="badge rounded-pill px-3 py-2 fw-semibold" style="{{ $statusStyle }}">
                         {{ $bookingStatusLabel }}
                     </span>
-                    <span class="badge rounded-pill px-3 py-2 fw-semibold" style="{{ $payBadgeStyle }}">
+                    <span id="orderTopPayBadge" class="badge rounded-pill px-3 py-2 fw-semibold" style="{{ $payBadgeStyle }}">
                         Payment: {{ $pricingSummary['payment_status_label'] }}
                     </span>
                     <span class="badge rounded-pill px-3 py-2 fw-semibold"
@@ -104,6 +105,22 @@
                     </span>
                 </div>
             </div>
+
+            @if (session('success'))
+                <div class="alert alert-success rounded-4 border-0 shadow-sm mb-3 py-2 px-3 small fw-semibold" role="alert">
+                    {{ session('success') }}
+                </div>
+            @endif
+            @if (session('error'))
+                <div class="alert alert-danger rounded-4 border-0 shadow-sm mb-3 py-2 px-3 small fw-semibold" role="alert">
+                    {{ session('error') }}
+                </div>
+            @endif
+            @if (session('info'))
+                <div class="alert alert-info rounded-4 border-0 shadow-sm mb-3 py-2 px-3 small fw-semibold" role="alert">
+                    {{ session('info') }}
+                </div>
+            @endif
 
             <div class="row g-3 align-items-start">
                 <div class="col-12">
@@ -418,22 +435,83 @@
                             <div style="color: #555555;">{{ $booking->customer_phone }} &bull; {{ $booking->customer_email }}</div>
                         </div>
 
-                        <div class="border-top pt-3">
-                            <div class="fw-semibold mb-1" style="color: #777777;">Payment Information</div>
+                        <div class="border-top pt-3" id="custPaymentCard">
+                            @php
+                                $custGateway = strtolower((string) ($booking->payment_gateway ?? 'cod'));
+                                $custGatewayLabel = match ($custGateway) {
+                                    'stripe' => 'Stripe',
+                                    'paypal' => 'PayPal',
+                                    'cod' => 'Cash on Delivery',
+                                    default => $paymentSnap['payment_method_name'] ?? strtoupper($custGateway),
+                                };
+                                $isOnlineGateway = in_array($custGateway, ['stripe', 'paypal'], true);
+                                $isCancelledOrder = $booking->cancelled_at !== null || $booking->booking_status === \App\Models\Booking::STATUS_CANCELLED;
+                                $isOtpVerifiedOrder = $booking->collection_otp_verified_at !== null;
+                                $custPaymentState = $paymentState ?? ['confirmed_paid_minor' => 0, 'outstanding_minor' => 0, 'is_payment_satisfied' => false, 'is_pricing_complete' => $pricingSummary['is_pricing_complete'], 'currency' => $booking->currency];
+                            @endphp
+                            <div class="fw-semibold mb-2" style="color: #777777;">Payment Information</div>
                             <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span style="color: #777777;">Method</span>
-                                <span class="fw-bold" style="color: #171717;">{{ $paymentSnap['payment_method_name'] ?? strtoupper((string) $booking->payment_gateway) }}</span>
+                                <span style="color: #777777;">Payment Method</span>
+                                <span class="fw-bold" style="color: #171717;">{{ $custGatewayLabel }}</span>
                             </div>
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <span style="color: #777777;">Payment Status</span>
-                                <span class="badge rounded-pill px-2 py-1 fw-semibold" style="{{ $payBadgeStyle }}">{{ $pricingSummary['payment_status_label'] }}</span>
+                                <span id="custPaymentStatusBadge" class="badge rounded-pill px-2 py-1 fw-semibold" style="{{ $payBadgeStyle }}">{{ $pricingSummary['payment_status_label'] }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span style="color: #777777;">Confirmed Paid</span>
+                                <span id="custConfirmedPaid" class="fw-semibold text-success">{{ $currencyService->formatMinor((int) ($custPaymentState['confirmed_paid_minor'] ?? 0), $booking->currency) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span style="color: #777777;">Outstanding</span>
+                                <span id="custOutstandingAmount" class="fw-bold" style="color: #171717;">{{ $currencyService->formatMinor((int) ($custPaymentState['outstanding_minor'] ?? 0), $booking->currency) }}</span>
                             </div>
                             @if($booking->stripe_payment_intent_id || $booking->paypal_order_id)
-                                <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span style="color: #777777;">Reference</span>
                                     <span class="small text-muted">{{ $booking->stripe_payment_intent_id ?: $booking->paypal_order_id }}</span>
                                 </div>
                             @endif
+
+                            <div id="custPaymentActionArea" class="mt-3 pt-2 border-top">
+                                @if($custPaymentState['is_payment_satisfied'])
+                                    <div class="p-2 px-3 rounded-3 small fw-bold text-center" style="background-color: #D1FAE5; border: 1px solid #86EFAC; color: #047857;">
+                                        Payment Completed &#10003;
+                                    </div>
+                                @elseif($isOnlineGateway && !$isCancelledOrder)
+                                    @if(!$isOtpVerifiedOrder)
+                                        <div class="p-2 px-3 rounded-3 small fw-semibold" style="background-color: #FFF8E5; border: 1px solid #FDE68A; color: #92400E;">
+                                            Online payment will be available after OTP verification.
+                                        </div>
+                                    @elseif(!$custPaymentState['is_pricing_complete'])
+                                        <div class="p-2 px-3 rounded-3 small fw-semibold" style="background-color: #FFF8E5; border: 1px solid #FDE68A; color: #92400E;">
+                                            Awaiting Final Amount.
+                                        </div>
+                                    @elseif((int) ($custPaymentState['outstanding_minor'] ?? 0) > 0)
+                                        @php
+                                            $formattedOutstanding = $currencyService->formatMinor((int) ($custPaymentState['outstanding_minor'] ?? 0), $booking->currency);
+                                        @endphp
+                                        @if($custGateway === 'stripe')
+                                            <button type="button"
+                                                    id="btnOpenStripePayment"
+                                                    class="btn btn-warning w-100 fw-bold text-dark rounded-3 py-2"
+                                                    data-intent-url="{{ route('orders.stripe.payment-intent', $booking->reference) }}"
+                                                    data-status-url="{{ route('orders.payment-status', $booking->reference) }}"
+                                                    data-return-url="{{ route('orders.show', $booking->reference) }}"
+                                                    data-amount-label="{{ $formattedOutstanding }}">
+                                                Pay with Stripe
+                                            </button>
+                                        @elseif($custGateway === 'paypal')
+                                            <form method="POST" action="{{ route('orders.pay.paypal', $booking->reference) }}" class="js-cust-pay-form">
+                                                @csrf
+                                                <button type="submit" class="btn btn-primary w-100 fw-bold rounded-3 py-2">
+                                                    Pay Securely with PayPal
+                                                </button>
+                                            </form>
+                                        @endif
+                                    @endif
+                                @endif
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -443,6 +521,381 @@
 
     @include('shared.bottom-nav')
     @include('shared.offcanvas-nav')
+
+    @if(strtolower((string) ($booking->payment_gateway ?? '')) === 'stripe')
+        @php
+            $modalOutstandingLabel = $currencyService->formatMinor((int) ($paymentState['outstanding_minor'] ?? 0), $booking->currency);
+        @endphp
+        <!-- Centered Stripe Payment Popup Modal -->
+        <div class="modal fade" id="stripePaymentModal" tabindex="-1" aria-labelledby="stripePaymentModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 500px;">
+                <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; background: #FFFFFF;">
+                    <div class="modal-header border-bottom-0 pb-2 px-4 pt-4">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="d-inline-flex align-items-center justify-content-center rounded-3"
+                                  style="width: 38px; height: 38px; background: #FFF8E5; border: 1.5px solid #FFC629; color: #171717;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                                </svg>
+                            </span>
+                            <div>
+                                <h5 class="modal-title fw-bold mb-0 fs-6" id="stripePaymentModalLabel" style="color: #171717;">Secure Stripe Payment</h5>
+                                <div class="small" style="color: #64748B;">Complete your booking payment securely.</div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-close" id="btnCustStripeCloseX" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body px-4 pt-2 pb-3">
+                        <!-- Form State -->
+                        <div id="custStripeFormView">
+                            <div class="p-3 rounded-3 mb-3 small" style="background-color: #FFF8E5; border: 1.5px solid #FFC629;">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="color: #64748B;">Booking:</span>
+                                    <strong style="color: #171717;">{{ $booking->reference }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="color: #64748B;">Payment Method:</span>
+                                    <strong style="color: #171717;">Stripe</strong>
+                                </div>
+                                <div class="d-flex justify-content-between border-top pt-1 mt-1">
+                                    <span style="color: #64748B;">Amount to Pay:</span>
+                                    <strong class="fs-6" style="color: #171717;">{{ $modalOutstandingLabel }}</strong>
+                                </div>
+                            </div>
+
+                            <div id="custStripeLoading" class="d-flex align-items-center gap-2 small text-muted py-3 justify-content-center">
+                                <span class="spinner-border spinner-border-sm text-warning" role="status" aria-hidden="true"></span>
+                                <span>Loading secure card form...</span>
+                            </div>
+                            <div id="custStripePaymentElement" class="mb-2"></div>
+                            <div id="custStripeError" class="alert alert-danger py-2 px-3 small fw-semibold mt-2 mb-0 d-none" role="alert"></div>
+                            <div id="custStripeProcessingMsg" class="alert alert-info py-2 px-3 small fw-semibold mt-2 mb-0 d-none"></div>
+                        </div>
+
+                        <!-- Success State Inside Modal -->
+                        <div id="custStripeSuccessView" class="text-center py-3 d-none">
+                            <div class="mx-auto mb-3 d-inline-flex align-items-center justify-content-center rounded-circle"
+                                 style="width: 60px; height: 60px; background: #DCFCE7; color: #16A34A;">
+                                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                            </div>
+                            <h5 class="fw-bold mb-1" style="color: #171717;">Payment Successful</h5>
+                            <p class="small mb-3" style="color: #64748B;">Your payment has been received.</p>
+
+                            <div class="p-3 rounded-3 text-start small mb-3" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="color: #64748B;">Booking Reference:</span>
+                                    <strong style="color: #171717;">{{ $booking->reference }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="color: #64748B;">Amount Paid:</span>
+                                    <strong id="custStripeSuccessPaid" style="color: #16A34A;">{{ $modalOutstandingLabel }}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span style="color: #64748B;">Payment Status:</span>
+                                    <span class="badge rounded-pill px-2 py-1" style="background: #D1FAE5; color: #047857;">Paid</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span style="color: #64748B;">Booking Status:</span>
+                                    <strong id="custStripeSuccessBookingStatus" style="color: #171717;">Finalized</strong>
+                                </div>
+                            </div>
+
+                            <button type="button" id="btnCustStripeDone" class="btn btn-warning w-100 fw-bold text-dark rounded-3 py-2">
+                                Done
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer border-top-0 px-4 pb-4 pt-1" id="custStripeModalFooter">
+                        <button type="button" id="btnCustStripeCancel" class="btn btn-outline-secondary rounded-3 fw-semibold px-3" data-bs-dismiss="modal">
+                            Cancel
+                        </button>
+                        <button type="button" id="btnCustStripePayNow" class="btn btn-warning fw-bold text-dark rounded-3 px-4 flex-grow-1" disabled>
+                            <span id="btnCustStripePayNowText">Pay {{ $modalOutstandingLabel }}</span>
+                            <span id="btnCustStripePayNowSpinner" class="spinner-border spinner-border-sm ms-1 d-none" role="status" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @include('orders.partials.need-help-claims')
+
     <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
+    @if(strtolower((string) ($booking->payment_gateway ?? '')) === 'stripe')
+        <script src="https://js.stripe.com/v3/"></script>
+    @endif
+    <script>
+    (() => {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        document.querySelectorAll('.js-cust-pay-form').forEach((form) => {
+            form.addEventListener('submit', () => {
+                const btn = form.querySelector('button[type="submit"]');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Redirecting to secure payment...';
+                }
+            });
+        });
+
+        const applyVerifiedPaymentUi = (data) => {
+            const topPay = document.querySelector('#orderTopPayBadge');
+            const cardPay = document.querySelector('#custPaymentStatusBadge');
+            const paidEl = document.querySelector('#custConfirmedPaid');
+            const outEl = document.querySelector('#custOutstandingAmount');
+            const topStatus = document.querySelector('#orderTopStatusBadge');
+            const actionArea = document.querySelector('#custPaymentActionArea');
+
+            if (topPay) {
+                topPay.textContent = 'Payment: ' + (data.payment_status_label || 'Paid');
+                topPay.style.backgroundColor = '#D1FAE5';
+                topPay.style.color = '#047857';
+            }
+            if (cardPay) {
+                cardPay.textContent = data.payment_status_label || 'Paid';
+                cardPay.style.backgroundColor = '#D1FAE5';
+                cardPay.style.color = '#047857';
+            }
+            if (paidEl && data.formatted_paid) paidEl.textContent = data.formatted_paid;
+            if (outEl && data.formatted_outstanding) outEl.textContent = data.formatted_outstanding;
+            if (topStatus && data.booking_status_label) topStatus.textContent = data.booking_status_label;
+            if (actionArea) {
+                actionArea.innerHTML = '<div class="p-2 px-3 rounded-3 small fw-bold text-center" style="background-color: #D1FAE5; border: 1px solid #86EFAC; color: #047857;">Payment Completed &#10003;</div>';
+            }
+        };
+
+        const btnOpenStripe = document.querySelector('#btnOpenStripePayment');
+        const stripeModalEl = document.querySelector('#stripePaymentModal');
+        const stripeFormView = document.querySelector('#custStripeFormView');
+        const stripeSuccessView = document.querySelector('#custStripeSuccessView');
+        const stripeModalFooter = document.querySelector('#custStripeModalFooter');
+        const stripeLoading = document.querySelector('#custStripeLoading');
+        const stripeError = document.querySelector('#custStripeError');
+        const stripeProcessingMsg = document.querySelector('#custStripeProcessingMsg');
+        const btnPayNow = document.querySelector('#btnCustStripePayNow');
+        const btnPayNowText = document.querySelector('#btnCustStripePayNowText');
+        const btnPayNowSpinner = document.querySelector('#btnCustStripePayNowSpinner');
+        const btnCancel = document.querySelector('#btnCustStripeCancel');
+        const btnCloseX = document.querySelector('#btnCustStripeCloseX');
+        const btnDone = document.querySelector('#btnCustStripeDone');
+        const successPaidEl = document.querySelector('#custStripeSuccessPaid');
+        const successStatusEl = document.querySelector('#custStripeSuccessBookingStatus');
+
+        let stripeModalInstance = null;
+        let stripeInstance = null;
+        let stripeElements = null;
+        let isInitializingIntent = false;
+        let isConfirmingPayment = false;
+        let statusPollTimer = null;
+        let verifiedPaymentData = null;
+
+        const showModalSuccess = (data) => {
+            verifiedPaymentData = data;
+            if (successPaidEl && data.formatted_paid) successPaidEl.textContent = data.formatted_paid;
+            if (successStatusEl) {
+                successStatusEl.textContent = data.is_finalized ? 'Finalized' : (data.booking_status_label || 'Updated');
+            }
+            stripeFormView?.classList.add('d-none');
+            stripeModalFooter?.classList.add('d-none');
+            stripeSuccessView?.classList.remove('d-none');
+            if (btnCloseX) btnCloseX.disabled = false;
+        };
+
+        const setConfirmingState = (busy) => {
+            isConfirmingPayment = busy;
+            if (btnPayNow) btnPayNow.disabled = busy;
+            if (btnCancel) btnCancel.disabled = busy;
+            if (btnCloseX) btnCloseX.disabled = busy;
+            if (btnPayNowText) {
+                btnPayNowText.textContent = busy
+                    ? 'Processing payment...'
+                    : ('Pay ' + (btnOpenStripe?.dataset.amountLabel || ''));
+            }
+            btnPayNowSpinner?.classList.toggle('d-none', !busy);
+        };
+
+        const pollUntilVerified = (statusUrl) => {
+            if (statusPollTimer) clearInterval(statusPollTimer);
+            let attempts = 0;
+            statusPollTimer = setInterval(async () => {
+                attempts++;
+                try {
+                    const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data.is_payment_satisfied) {
+                        clearInterval(statusPollTimer);
+                        statusPollTimer = null;
+                        setConfirmingState(false);
+                        showModalSuccess(data);
+                        return;
+                    }
+                    if (data.payment_status === 'failed' || attempts >= 15) {
+                        clearInterval(statusPollTimer);
+                        statusPollTimer = null;
+                        setConfirmingState(false);
+                        stripeProcessingMsg?.classList.add('d-none');
+                        if (stripeError) {
+                            stripeError.textContent = data.payment_status === 'failed'
+                                ? 'Payment failed. Please try again.'
+                                : 'Payment verification is taking longer than expected. Please refresh shortly.';
+                            stripeError.classList.remove('d-none');
+                        }
+                    }
+                } catch {}
+            }, 2000);
+        };
+
+        const initStripeModalElement = async () => {
+            if (stripeElements || isInitializingIntent || !btnOpenStripe) return;
+            isInitializingIntent = true;
+            stripeLoading?.classList.remove('d-none');
+            stripeError?.classList.add('d-none');
+            if (btnPayNow) btnPayNow.disabled = true;
+
+            try {
+                const res = await fetch(btnOpenStripe.dataset.intentUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({}),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success || !data.client_secret || !data.publishable_key) {
+                    throw new Error(data.message || 'Unable to initialize Stripe payment.');
+                }
+                if (!window.Stripe) {
+                    throw new Error('Stripe.js failed to load. Please refresh and try again.');
+                }
+
+                stripeInstance = window.Stripe(data.publishable_key);
+                stripeElements = stripeInstance.elements({
+                    clientSecret: data.client_secret,
+                    appearance: {
+                        theme: 'stripe',
+                        variables: {
+                            colorPrimary: '#FFC629',
+                            colorBackground: '#FFFFFF',
+                            colorText: '#171717',
+                            borderRadius: '10px',
+                        },
+                    },
+                });
+                const paymentEl = stripeElements.create('payment');
+                paymentEl.mount('#custStripePaymentElement');
+                stripeLoading?.classList.add('d-none');
+                if (btnPayNow) btnPayNow.disabled = false;
+            } catch (err) {
+                stripeLoading?.classList.add('d-none');
+                if (stripeError) {
+                    stripeError.textContent = err.message || 'Unable to load card form.';
+                    stripeError.classList.remove('d-none');
+                }
+            } finally {
+                isInitializingIntent = false;
+            }
+        };
+
+        btnOpenStripe?.addEventListener('click', () => {
+            if (!stripeModalEl || !window.bootstrap) return;
+            stripeModalInstance = window.bootstrap.Modal.getOrCreateInstance(stripeModalEl);
+            stripeError?.classList.add('d-none');
+            stripeProcessingMsg?.classList.add('d-none');
+            stripeModalInstance.show();
+            initStripeModalElement();
+        });
+
+        btnDone?.addEventListener('click', () => {
+            if (verifiedPaymentData) {
+                applyVerifiedPaymentUi(verifiedPaymentData);
+            }
+            stripeModalInstance?.hide();
+        });
+
+        stripeModalEl?.addEventListener('hidden.bs.modal', () => {
+            if (verifiedPaymentData) {
+                applyVerifiedPaymentUi(verifiedPaymentData);
+            }
+        });
+
+        btnPayNow?.addEventListener('click', async () => {
+            if (isConfirmingPayment || !stripeInstance || !stripeElements) return;
+
+            setConfirmingState(true);
+            stripeError?.classList.add('d-none');
+            stripeProcessingMsg?.classList.add('d-none');
+
+            try {
+                const { error, paymentIntent } = await stripeInstance.confirmPayment({
+                    elements: stripeElements,
+                    confirmParams: {
+                        return_url: btnOpenStripe?.dataset.returnUrl || window.location.href,
+                    },
+                    redirect: 'if_required',
+                });
+
+                if (error) {
+                    throw new Error(error.message || 'Card payment failed. Please check your details.');
+                }
+
+                if (paymentIntent && (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing')) {
+                    if (stripeProcessingMsg) {
+                        stripeProcessingMsg.textContent = 'Payment is processing. Verifying with Stripe...';
+                        stripeProcessingMsg.classList.remove('d-none');
+                    }
+                    const statusUrl = btnOpenStripe?.dataset.statusUrl || '';
+                    if (statusUrl) {
+                        const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+                        if (res.ok) {
+                            const statusData = await res.json();
+                            if (statusData.is_payment_satisfied) {
+                                setConfirmingState(false);
+                                showModalSuccess(statusData);
+                                return;
+                            }
+                        }
+                        pollUntilVerified(statusUrl);
+                    }
+                } else {
+                    setConfirmingState(false);
+                }
+            } catch (err) {
+                setConfirmingState(false);
+                if (stripeError) {
+                    stripeError.textContent = err.message || 'Payment failed. Please try again.';
+                    stripeError.classList.remove('d-none');
+                }
+            }
+        });
+
+        @if(in_array(strtolower((string) ($booking->payment_gateway ?? '')), ['stripe', 'paypal'], true) && $booking->cancelled_at === null && empty($paymentState['is_payment_satisfied']))
+        const initialOtpVerified = {{ $booking->collection_otp_verified_at !== null ? 'true' : 'false' }};
+        const initialPricingComplete = {{ !empty($paymentState['is_pricing_complete']) ? 'true' : 'false' }};
+        const statusUrl = "{{ route('orders.payment-status', $booking->reference) }}";
+        setInterval(async () => {
+            if (isConfirmingPayment || verifiedPaymentData) return;
+            try {
+                const res = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.is_payment_satisfied) {
+                    applyVerifiedPaymentUi(data);
+                } else if (data.otp_verified !== initialOtpVerified || data.is_pricing_complete !== initialPricingComplete) {
+                    window.location.reload();
+                }
+            } catch {}
+        }, 5000);
+        @endif
+    })();
+    </script>
 </body>
 </html>

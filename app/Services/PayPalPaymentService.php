@@ -126,20 +126,28 @@ class PayPalPaymentService
         }
     }
 
-    public function createOrder(Booking $booking, string $returnUrl, string $cancelUrl): array
-    {
+    public function createOrder(
+        Booking $booking,
+        string $returnUrl,
+        string $cancelUrl,
+        ?int $overrideAmountMinor = null,
+        ?string $overrideCurrency = null
+    ): array {
         $currencyService = app(CurrencyService::class);
-        $currency = strtoupper((string) ($booking->currency ?: $this->currency()));
+        $currency = strtoupper((string) ($overrideCurrency ?: $booking->currency ?: $this->currency()));
         if (! $currencyService->isPayPalSupported($currency)) {
             throw new \RuntimeException("Currency {$currency} is not supported by PayPal.");
         }
 
-        $minor = (int) ($booking->final_amount_minor ?? $booking->estimated_amount_minor ?? 0);
+        $minor = $overrideAmountMinor !== null
+            ? $overrideAmountMinor
+            : (int) ($booking->final_amount_minor ?? $booking->estimated_amount_minor ?? 0);
         $amount = $currencyService->fromMinor($minor, $currency);
         if ($amount <= 0) {
             throw new \RuntimeException('Booking amount must be greater than zero to create a PayPal order.');
         }
 
+        $bookingRef = (string) ($booking->reference ?? $booking->booking_reference ?? ('#' . $booking->id));
         $token = $this->getAccessToken();
 
         $response = Http::withToken($token)
@@ -148,9 +156,9 @@ class PayPalPaymentService
                 'intent' => 'CAPTURE',
                 'purchase_units' => [
                     [
-                        'reference_id' => $booking->booking_reference,
+                        'reference_id' => $bookingRef,
                         'custom_id' => (string) $booking->id,
-                        'description' => 'Laundry Order '.$booking->booking_reference,
+                        'description' => 'Laundry Order '.$bookingRef,
                         'amount' => [
                             'currency_code' => $currency,
                             'value' => number_format($amount, 2, '.', ''),
@@ -193,11 +201,15 @@ class PayPalPaymentService
 
         $data = $response->json();
         $captureId = data_get($data, 'purchase_units.0.payments.captures.0.id');
+        $captureAmount = data_get($data, 'purchase_units.0.payments.captures.0.amount.value');
+        $captureCurrency = data_get($data, 'purchase_units.0.payments.captures.0.amount.currency_code');
 
         return [
             'order_id' => (string) ($data['id'] ?? $orderId),
             'capture_id' => $captureId ? (string) $captureId : null,
             'status' => (string) ($data['status'] ?? ''),
+            'amount_value' => $captureAmount !== null ? (string) $captureAmount : null,
+            'currency_code' => $captureCurrency ? strtoupper((string) $captureCurrency) : null,
         ];
     }
 
@@ -227,5 +239,43 @@ class PayPalPaymentService
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Refund a captured PayPal payment via Payments v2 Capture Refund API.
+     *
+     * @return array{id: string, status: string}
+     */
+    public function refundCapture(
+        string $captureId,
+        int $amountMinor,
+        string $currency,
+        string $idempotencyKey,
+        ?string $note = null
+    ): array {
+        $token = $this->getAccessToken();
+        $payload = [
+            'amount' => [
+                'value' => number_format($amountMinor / 100, 2, '.', ''),
+                'currency_code' => strtoupper($currency),
+            ],
+        ];
+        if ($note) {
+            $payload['note_to_payer'] = mb_substr($note, 0, 255);
+        }
+
+        $response = Http::withToken($token)
+            ->withHeaders(['PayPal-Request-Id' => $idempotencyKey])
+            ->timeout(20)
+            ->post($this->baseUrl() . "/v2/payments/captures/{$captureId}/refund", $payload);
+
+        if (! $response->successful()) {
+            throw new \RuntimeException('PayPal refund failed: ' . $response->body());
+        }
+
+        return [
+            'id' => (string) $response->json('id'),
+            'status' => strtoupper((string) $response->json('status', 'PENDING')),
+        ];
     }
 }

@@ -506,7 +506,9 @@ class BookingAddressTest extends TestCase
         $this->assertEquals('weekly', session('booking.schedule.repeat_frequency'));
 
         // Confirm final booking
-        $confirmResp = $this->post(route('booking.confirm.store'));
+        $confirmResp = $this->post(route('booking.confirm.store'), [
+            'payment_method' => 'cod',
+        ]);
         $confirmResp->assertRedirect();
         $this->assertNotEmpty(session('booking.confirmed_at'));
         $this->assertNotEmpty(session('booking.reference'));
@@ -761,5 +763,92 @@ class BookingAddressTest extends TestCase
         ]);
         $confirmSubmit2->assertRedirect(route('booking.success', $firstRef));
         $this->assertEquals($firstRef, session('booking.reference'));
+    }
+
+    public function test_step_5_simplified_confirm_page_requires_payment_method_and_creates_booking(): void
+    {
+        $colDate = now()->addDay()->format('Y-m-d');
+        $delDate = now()->addDays(2)->format('Y-m-d');
+
+        $completeBookingSession = [
+            'booking' => [
+                'services' => [
+                    [
+                        'category_id' => 1,
+                        'service_id' => 2,
+                        'name' => 'Wash & Fold',
+                        'sub_service_name' => 'Mixed Wash & Fold',
+                        'slug' => 'wash-fold',
+                        'unit_price' => 600,
+                        'pricing_type' => 'per_kg',
+                    ],
+                ],
+                'address' => [
+                    'postcode' => 'E1 0BJ',
+                    'selected_address' => 'FLAT 64, BROCKMER HOUSE, CROWDER STREET, LONDON, E1 0BJ',
+                    'address_type' => 'HOME',
+                ],
+                'schedule' => [
+                    'collection_date' => $colDate,
+                    'collection_slot' => '20:00 - 23:00',
+                    'collection_instructions' => 'Collect from me in person',
+                    'delivery_date' => $delDate,
+                    'delivery_slot' => '20:00 - 23:00',
+                    'delivery_instructions' => 'Deliver to me in person',
+                    'driver_notes' => 'Ring doorbell',
+                ],
+                'details' => [
+                    'customer_type' => 'individual',
+                    'first_name' => 'MD.',
+                    'last_name' => 'NAIB',
+                    'customer_name' => 'MD. NAIB',
+                    'country_code' => '+880',
+                    'phone_number' => '1724698392',
+                    'customer_phone' => '+880 1724698392',
+                    'customer_email' => 'mutasimstore@gmail.com',
+                ],
+            ],
+        ];
+
+        $this->withSession($completeBookingSession)
+            ->get(route('booking.confirm'))
+            ->assertStatus(200)
+            ->assertSee('Review and confirm')
+            ->assertSee('Enter payment details')
+            ->assertSee('Confirm Booking')
+            ->assertDontSee('Promo Code')
+            ->assertDontSee('Driver Tip');
+
+        // Missing payment_method -> validation error
+        $this->withSession($completeBookingSession)
+            ->from(route('booking.confirm'))
+            ->post(route('booking.confirm.store'), [])
+            ->assertSessionHasErrors('payment_method');
+
+        // Invalid payment_method -> validation error
+        $this->withSession($completeBookingSession)
+            ->from(route('booking.confirm'))
+            ->post(route('booking.confirm.store'), ['payment_method' => 'invalid_gateway'])
+            ->assertSessionHasErrors('payment_method');
+
+        // Valid COD submission -> creates 1 booking with pending_item_count
+        $resp = $this->withSession($completeBookingSession)
+            ->post(route('booking.confirm.store'), ['payment_method' => 'cod']);
+
+        $ref = session('booking.reference');
+        $this->assertNotEmpty($ref);
+        $resp->assertRedirect(route('booking.success', $ref));
+
+        $this->assertDatabaseHas('bookings', [
+            'reference' => $ref,
+            'payment_gateway' => 'cod',
+            'payment_status' => 'pending_item_count',
+        ]);
+        $this->assertEquals(1, \App\Models\Booking::where('reference', $ref)->count());
+
+        // Duplicate submit does not create a second booking
+        $resp2 = $this->post(route('booking.confirm.store'), ['payment_method' => 'cod']);
+        $resp2->assertRedirect(route('booking.success', $ref));
+        $this->assertEquals(1, \App\Models\Booking::where('reference', $ref)->count());
     }
 }

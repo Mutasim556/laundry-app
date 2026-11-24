@@ -33,6 +33,16 @@ class BookingCustomerPayment extends Model
         'currency',
         'status',
         'external_reference',
+        'stripe_payment_intent_id',
+        'stripe_charge_id',
+        'stripe_balance_transaction_id',
+        'gateway_gross_minor',
+        'gateway_fee_minor',
+        'gateway_net_minor',
+        'gateway_fee_currency',
+        'gateway_fee_details',
+        'fee_reconciliation_status',
+        'fee_reconciled_at',
         'receiving_account',
         'proof_path',
         'idempotency_key',
@@ -46,8 +56,13 @@ class BookingCustomerPayment extends Model
     {
         return [
             'amount_minor' => 'integer',
+            'gateway_gross_minor' => 'integer',
+            'gateway_fee_minor' => 'integer',
+            'gateway_net_minor' => 'integer',
+            'gateway_fee_details' => 'array',
             'collected_at' => 'datetime',
             'verified_at' => 'datetime',
+            'fee_reconciled_at' => 'datetime',
         ];
     }
 

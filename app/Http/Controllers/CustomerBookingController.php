@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Services\CollectionPaymentService;
 use App\Services\CurrencyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use RuntimeException;
 
 class CustomerBookingController extends Controller
 {
@@ -206,7 +209,7 @@ class CustomerBookingController extends Controller
         return redirect()->route('orders.show', $booking->reference);
     }
 
-    public function show(Request $request, string $reference, CurrencyService $currencyService): View
+    public function show(Request $request, string $reference, CurrencyService $currencyService, CollectionPaymentService $paymentService): View
     {
         $booking = Booking::where('reference', $reference)->firstOrFail();
         abort_unless($this->canAccessBooking($request, $booking), 403, 'You are not authorized to view this booking.');
@@ -218,18 +221,163 @@ class CustomerBookingController extends Controller
             'currentStoreAssignment',
             'currentCollectionAssignment.deliveryPerson',
             'currentFinalDeliveryAssignment.deliveryPerson',
+            'customerPayments' => fn ($q) => $q->orderByDesc('id'),
+            'claims.items',
+            'claims.evidence',
+            'claims.refundTransactions',
         ]);
 
         $pricingSummary = $booking->getOperationalPricingSummary($currencyService);
+        $paymentState = $paymentService->getPaymentState($booking);
         $categoryGroups = $booking->getActiveOperationalCategoryGroups();
         $stageProgress = $booking->getOperationalStageProgress();
+        $claimEligibility = app(\App\Services\PolicyResolutionService::class)->getCustomerEligibility($booking);
 
         return view('orders.show', [
             'booking' => $booking,
             'pricingSummary' => $pricingSummary,
+            'paymentState' => $paymentState,
             'categoryGroups' => $categoryGroups,
             'currencyService' => $currencyService,
             'stageProgress' => $stageProgress,
+            'claimEligibility' => $claimEligibility,
+        ]);
+    }
+
+    public function createStripePaymentIntent(Request $request, string $reference, CollectionPaymentService $paymentService): JsonResponse
+    {
+        $booking = Booking::where('reference', $reference)->firstOrFail();
+        abort_unless($request->user() !== null && $this->canAccessBooking($request, $booking), 403, 'You are not authorized to pay for this booking.');
+
+        try {
+            $intent = $paymentService->initiateCustomerStripePaymentIntent($booking);
+
+            return response()->json([
+                'success' => true,
+                'publishable_key' => $intent['publishable_key'],
+                'client_secret' => $intent['client_secret'],
+                'payment_intent_id' => $intent['payment_intent_id'],
+                'amount_minor' => $intent['amount_minor'],
+                'currency' => $intent['currency'],
+            ]);
+        } catch (RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            Log::error('Customer Stripe PaymentIntent creation failed', [
+                'booking_id' => $booking->id,
+                'user_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to initialize Stripe payment right now. Please try again later.',
+            ], 500);
+        }
+    }
+
+    public function payWithStripe(Request $request, string $reference, CollectionPaymentService $paymentService): RedirectResponse
+    {
+        $booking = Booking::where('reference', $reference)->firstOrFail();
+        abort_unless($request->user() !== null && $this->canAccessBooking($request, $booking), 403, 'You are not authorized to pay for this booking.');
+
+        try {
+            $session = $paymentService->initiateCustomerStripeCheckout($booking);
+            $checkoutUrl = (string) ($session['checkout_url'] ?? '');
+            if ($checkoutUrl === '') {
+                return back()->with('error', 'Unable to start Stripe checkout right now. Please try again.');
+            }
+
+            return redirect()->away($checkoutUrl);
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Customer Stripe checkout initiation failed', [
+                'booking_id' => $booking->id,
+                'user_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Unable to start Stripe payment right now. Please try again later.');
+        }
+    }
+
+    public function payWithPayPal(Request $request, string $reference, CollectionPaymentService $paymentService): RedirectResponse
+    {
+        $booking = Booking::where('reference', $reference)->firstOrFail();
+        abort_unless($request->user() !== null && $this->canAccessBooking($request, $booking), 403, 'You are not authorized to pay for this booking.');
+
+        try {
+            $order = $paymentService->initiateCustomerPayPalOrder($booking);
+            $approveUrl = (string) ($order['approve_url'] ?? '');
+            if ($approveUrl === '') {
+                return back()->with('error', 'Unable to start PayPal checkout right now. Please try again.');
+            }
+
+            return redirect()->away($approveUrl);
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Customer PayPal order initiation failed', [
+                'booking_id' => $booking->id,
+                'user_id' => $request->user()?->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Unable to start PayPal payment right now. Please try again later.');
+        }
+    }
+
+    public function paymentStatus(Request $request, string $reference, CurrencyService $currencyService, CollectionPaymentService $paymentService, \App\Services\StripePaymentService $stripeService): JsonResponse
+    {
+        $booking = Booking::where('reference', $reference)->firstOrFail();
+        abort_unless($this->canAccessBooking($request, $booking), 403, 'You are not authorized to view this booking.');
+
+        $state = $paymentService->getPaymentState($booking);
+
+        // Server-side reconciliation fallback if Stripe PaymentIntent succeeded before webhook delivery
+        if (! $state['is_payment_satisfied']
+            && strtolower((string) $booking->payment_gateway) === 'stripe'
+            && ! empty($booking->stripe_payment_intent_id)
+            && $stripeService->isActive()) {
+            try {
+                $pi = $stripeService->retrievePaymentIntent((string) $booking->stripe_payment_intent_id);
+                if (strtolower((string) ($pi->status ?? '')) === 'succeeded') {
+                    $amountMinor = (int) ($pi->amount_received ?? $pi->amount ?? 0);
+                    $currency = strtoupper((string) ($pi->currency ?? $booking->currency ?? 'GBP'));
+                    if ($amountMinor > 0) {
+                        $paymentService->recordVerifiedGatewayPayment(
+                            $booking,
+                            \App\Models\BookingCustomerPayment::METHOD_STRIPE,
+                            (string) $pi->id,
+                            $amountMinor,
+                            $currency,
+                            'Verified via Stripe PaymentIntent API'
+                        );
+                        $booking->refresh();
+                        $state = $paymentService->getPaymentState($booking);
+                    }
+                }
+            } catch (\Throwable) {
+                // Non-blocking; webhook or next poll will reconcile
+            }
+        }
+
+        $completedStages = $booking->getCompletedOperationalStatuses();
+
+        return response()->json([
+            'otp_verified' => $booking->collection_otp_verified_at !== null,
+            'is_pricing_complete' => $state['is_pricing_complete'],
+            'payment_status' => $booking->payment_status,
+            'payment_status_label' => $booking->getFinancialPaymentStatusLabel(),
+            'confirmed_paid_minor' => $state['confirmed_paid_minor'],
+            'outstanding_minor' => $state['outstanding_minor'],
+            'formatted_paid' => $currencyService->formatMinor($state['confirmed_paid_minor'], $state['currency']),
+            'formatted_outstanding' => $currencyService->formatMinor($state['outstanding_minor'], $state['currency']),
+            'is_payment_satisfied' => $state['is_payment_satisfied'],
+            'booking_status' => $booking->booking_status,
+            'booking_status_label' => $booking->getStatusLabel(),
+            'is_finalized' => in_array(Booking::STATUS_FINALIZED, $completedStages, true),
         ]);
     }
 

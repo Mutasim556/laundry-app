@@ -7,6 +7,8 @@
     $addr = is_array($booking->address_snapshot) ? $booking->address_snapshot : [];
     $schedule = is_array($booking->schedule_snapshot) ? $booking->schedule_snapshot : [];
     $contact = is_array($booking->contact_snapshot) ? $booking->contact_snapshot : [];
+    $colJob = $job ?? $ctx['collection_assignment'] ?? $booking->currentCollectionAssignment;
+    $colJobStatus = $colJob ? $colJob->getJobStatusDisplay() : null;
     $isOtpVerified = $booking->collection_otp_verified_at !== null;
     $isPaymentPaid = $paymentState['is_payment_satisfied'];
     $completedStages = $booking->getCompletedOperationalStatuses();
@@ -14,13 +16,22 @@
 @endphp
 
 <!-- Header & 4-Step Collection Progress -->
-<div class="dp-card p-3 mb-3" style="background: linear-gradient(135deg, #FFFFFF 0%, #FFF8E5 100%); border-color: #FDE68A;">
+<div class="dp-card p-3 mb-3" style="background: linear-gradient(135deg, #FFFFFF 0%, #FFF8E5 100%); border-color: #FDE68A; border-left: 4px solid #FFC629;">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
-            <span class="badge bg-warning-subtle text-warning-emphasis mb-1">Collection Assignment</span>
-            <h5 class="fw-bold mb-0">{{ $booking->reference }}</h5>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <span class="badge bg-warning-subtle text-warning-emphasis">COLLECTION JOB</span>
+                @if($colJob)
+                    <span class="small fw-semibold text-muted">{{ $colJob->job_code }} ({{ $colJob->assignment_reference }})</span>
+                @endif
+                @if($colJobStatus)
+                    <span class="badge rounded-pill px-2 py-1" style="{{ $colJobStatus['badge_style'] }}">{{ $colJobStatus['label'] }}</span>
+                @endif
+            </div>
+            <h5 class="fw-bold mb-0">Booking: {{ $booking->reference }}</h5>
             <div class="small text-muted">
-                Customer: <strong>{{ $booking->customer_name }}</strong> &bull; {{ $booking->customer_phone }}
+                From: <strong>{{ $booking->customer_name }}</strong> ({{ $booking->customer_phone }})
+                &rarr; To: <strong>{{ $booking->assignedStore?->name ?? 'Assigned Store' }}</strong>
                 &bull; Slot: {{ $booking->collection_slot_label ?: ($schedule['collection_date'] ?? '-') }}
             </div>
         </div>
@@ -247,63 +258,114 @@
     @endif
 
     <!-- Step 3: Customer Payment Collection & Finalize -->
+    @php
+        $selectedGateway = strtolower((string) ($booking->payment_gateway ?? 'cod'));
+        $isOnlineMethod = in_array($selectedGateway, ['stripe', 'paypal'], true);
+        $selectedGatewayLabel = match ($selectedGateway) {
+            'stripe' => 'Stripe',
+            'paypal' => 'PayPal',
+            'cod' => 'Cash on Delivery',
+            default => strtoupper($selectedGateway),
+        };
+        $financialStatusLabel = $booking->getFinancialPaymentStatusLabel();
+        $financialBadgeClass = match (strtolower((string) $booking->payment_status)) {
+            'paid' => 'bg-success-subtle text-success',
+            'partially_paid' => 'bg-info-subtle text-info-emphasis',
+            'failed' => 'bg-danger-subtle text-danger',
+            default => 'bg-warning-subtle text-warning-emphasis',
+        };
+    @endphp
     <div class="col-12 col-lg-6">
         <div class="dp-card p-3 h-100">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="fw-bold mb-0"><i class="mdi mdi-credit-card-outline text-success me-1"></i>Customer Payment</h6>
-                <span class="badge bg-{{ $isPaymentPaid ? 'success' : 'warning' }}-subtle text-{{ $isPaymentPaid ? 'success' : 'warning-emphasis' }}">
-                    {{ ucfirst(str_replace('_', ' ', (string) $booking->payment_status)) }}
+                <span class="badge {{ $financialBadgeClass }}" id="dpPaymentStatusBadge">
+                    {{ $financialStatusLabel }}
                 </span>
             </div>
 
-            <div class="small mb-2">
-                <div class="d-flex justify-content-between"><span>Total Booking Amount:</span><strong>{{ $currencyService->formatMinor($paymentState['total_minor'], $booking->currency) }}</strong></div>
-                <div class="d-flex justify-content-between"><span>Confirmed Paid / Advance:</span><strong class="text-success">{{ $currencyService->formatMinor($paymentState['confirmed_paid_minor'], $booking->currency) }}</strong></div>
-                <div class="d-flex justify-content-between border-top pt-1 mt-1"><span>Outstanding Balance:</span><strong class="text-danger">{{ $currencyService->formatMinor($paymentState['outstanding_minor'], $booking->currency) }}</strong></div>
+            <div class="small mb-3">
+                @php
+                    $isPricingFinalized = (bool) ($paymentState['is_pricing_complete'] ?? false);
+                    $pricingLabel = $paymentState['pricing']['pricing_status_label'] ?? ($isPricingFinalized ? 'Finalized' : 'Pending');
+                @endphp
+                <div class="d-flex justify-content-between mb-1">
+                    <span>{{ $isPricingFinalized ? 'Final Booking Amount:' : 'Estimated Booking Amount:' }}</span>
+                    <strong id="dpTotalAmountText">{{ $currencyService->formatMinor($paymentState['total_minor'], $booking->currency) }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>Pricing Status:</span>
+                    <span class="badge {{ $isPricingFinalized ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning-emphasis' }}" id="dpPricingStatusBadge">{{ $pricingLabel }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-1"><span>Confirmed Paid / Advance:</span><strong class="text-success" id="dpConfirmedPaidText">{{ $currencyService->formatMinor($paymentState['confirmed_paid_minor'], $booking->currency) }}</strong></div>
+                <div class="d-flex justify-content-between border-top pt-1 mt-1 mb-2"><span>Outstanding Balance:</span><strong class="text-danger" id="dpOutstandingText">{{ $currencyService->formatMinor($paymentState['outstanding_minor'], $booking->currency) }}</strong></div>
+                <div class="d-flex justify-content-between mb-1"><span>Customer Selected Payment Method:</span><strong class="text-dark">{{ $selectedGatewayLabel }}</strong></div>
+                <div class="d-flex justify-content-between">
+                    <span>OTP Verification Status:</span>
+                    <strong class="{{ $isOtpVerified ? 'text-success' : 'text-warning-emphasis' }}">
+                        {{ $isOtpVerified ? 'Verified' : 'Awaiting OTP Verification' }}
+                    </strong>
+                </div>
             </div>
 
-            @if($ctx['can_collect_payment'] && $isOtpVerified && $paymentState['outstanding_minor'] > 0)
-                <ul class="nav nav-pills nav-fill small mb-2" role="tablist">
-                    <li class="nav-item"><button class="nav-link active py-1" data-bs-toggle="pill" data-bs-target="#tabCash" type="button">Cash in Hand</button></li>
-                    <li class="nav-item"><button class="nav-link py-1" data-bs-toggle="pill" data-bs-target="#tabTransfer" type="button">Online Transfer</button></li>
-                    <li class="nav-item"><button class="nav-link py-1" data-bs-toggle="pill" data-bs-target="#tabGateway" type="button">Stripe / PayPal</button></li>
-                </ul>
-                <div class="tab-content small">
-                    <div class="tab-pane fade show active" id="tabCash">
-                        <form method="POST" action="{{ route('delivery-person.bookings.payments.cash', $booking) }}">
-                            @csrf
-                            <div class="mb-2">
-                                <label class="form-label mb-1">Cash Amount Received ({{ $booking->currency }})</label>
-                                <input type="number" step="0.01" min="0.01" max="{{ number_format($paymentState['outstanding_minor'] / 100, 2, '.', '') }}" name="amount" value="{{ number_format($paymentState['outstanding_minor'] / 100, 2, '.', '') }}" class="form-control form-control-sm" required>
-                            </div>
-                            <button type="submit" class="btn btn-sm btn-success w-100">Confirm Physical Cash Received</button>
-                        </form>
+            @if($isOnlineMethod)
+                @if($isFinalized)
+                    <div class="alert alert-success py-2 small mb-2 fw-semibold">
+                        <i class="mdi mdi-check-decagram me-1"></i>Booking Finalized
                     </div>
-                    <div class="tab-pane fade" id="tabTransfer">
-                        <form method="POST" action="{{ route('delivery-person.bookings.payments.transfer', $booking) }}">
-                            @csrf
-                            <div class="row g-2 mb-2">
-                                <div class="col-6">
-                                    <input type="number" step="0.01" min="0.01" name="amount" value="{{ number_format($paymentState['outstanding_minor'] / 100, 2, '.', '') }}" class="form-control form-control-sm" placeholder="Amount" required>
-                                </div>
-                                <div class="col-6">
-                                    <input type="text" name="external_reference" class="form-control form-control-sm" placeholder="Bank Ref #" required>
-                                </div>
-                            </div>
-                            <input type="text" name="receiving_account" class="form-control form-control-sm mb-2" placeholder="Receiving Business Account" value="Business Bank Account">
-                            <button type="submit" class="btn btn-sm btn-outline-primary w-100">Submit Transfer (Awaiting Admin Verification)</button>
-                        </form>
+                @elseif($isPaymentPaid)
+                    <div class="alert alert-success py-2 small mb-2 fw-semibold">
+                        <i class="mdi mdi-check-circle me-1"></i>Payment Completed
                     </div>
-                    <div class="tab-pane fade" id="tabGateway">
-                        <div class="d-grid gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-dark js-dp-gateway" data-url="{{ route('delivery-person.bookings.payments.stripe', $booking) }}">Generate Stripe Payment Session</button>
-                            <button type="button" class="btn btn-sm btn-outline-primary js-dp-gateway" data-url="{{ route('delivery-person.bookings.payments.paypal', $booking) }}">Generate PayPal Approval Link</button>
-                            <div id="dpGatewayResult" class="small text-muted"></div>
+                @elseif(!$isOtpVerified)
+                    <div class="alert alert-warning py-2 small mb-2 fw-semibold">
+                        Awaiting OTP Verification
+                    </div>
+                @elseif(!$paymentState['is_pricing_complete'])
+                    <div class="alert alert-warning py-2 small mb-2 fw-semibold">
+                        Awaiting Final Amount
+                    </div>
+                @else
+                    <div class="alert alert-info py-2 small mb-2 fw-semibold">
+                        OTP Verified &mdash; Awaiting Customer Online Payment
+                    </div>
+                @endif
+            @else
+                @if(!$isOtpVerified && !$isFinalized)
+                    <div class="alert alert-warning py-2 small mb-2">Verify Collection OTP first to unlock customer payment options.</div>
+                @elseif($ctx['can_collect_payment'] && $isOtpVerified && $paymentState['outstanding_minor'] > 0)
+                    <ul class="nav nav-pills nav-fill small mb-2" role="tablist">
+                        <li class="nav-item"><button class="nav-link active py-1" data-bs-toggle="pill" data-bs-target="#tabCash" type="button">Cash in Hand</button></li>
+                        <li class="nav-item"><button class="nav-link py-1" data-bs-toggle="pill" data-bs-target="#tabTransfer" type="button">Online Transfer</button></li>
+                    </ul>
+                    <div class="tab-content small">
+                        <div class="tab-pane fade show active" id="tabCash">
+                            <form method="POST" action="{{ route('delivery-person.bookings.payments.cash', $booking) }}">
+                                @csrf
+                                <div class="mb-2">
+                                    <label class="form-label mb-1">Cash Amount Received ({{ $booking->currency }})</label>
+                                    <input type="number" step="0.01" min="0.01" max="{{ number_format($paymentState['outstanding_minor'] / 100, 2, '.', '') }}" name="amount" value="{{ number_format($paymentState['outstanding_minor'] / 100, 2, '.', '') }}" class="form-control form-control-sm" required>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-success w-100">Confirm Physical Cash Received</button>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="tabTransfer">
+                            <form method="POST" action="{{ route('delivery-person.bookings.payments.transfer', $booking) }}">
+                                @csrf
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <input type="number" step="0.01" min="0.01" name="amount" value="{{ number_format($paymentState['outstanding_minor'] / 100, 2, '.', '') }}" class="form-control form-control-sm" placeholder="Amount" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <input type="text" name="external_reference" class="form-control form-control-sm" placeholder="Bank Ref #" required>
+                                    </div>
+                                </div>
+                                <input type="text" name="receiving_account" class="form-control form-control-sm mb-2" placeholder="Receiving Business Account" value="Business Bank Account">
+                                <button type="submit" class="btn btn-sm btn-outline-primary w-100">Submit Transfer (Awaiting Admin Verification)</button>
+                            </form>
                         </div>
                     </div>
-                </div>
-            @elseif(!$isOtpVerified && !$isFinalized)
-                <div class="alert alert-warning py-2 small mb-2">Verify Collection OTP first to unlock customer payment options.</div>
+                @endif
             @endif
 
             @if($ctx['can_finalize_collection'] && $isOtpVerified && $isPaymentPaid)
@@ -485,18 +547,15 @@
 
 @push('scripts')
 <script>
-    $(document).on('click', '.js-dp-gateway', function () {
-        const $btn = $(this).prop('disabled', true);
-        $.post($(this).data('url'), { _token: $('meta[name="csrf-token"]').attr('content') })
-            .done(function (res) {
-                const url = res.order?.approve_url || '';
-                $('#dpGatewayResult').html(url ? '<a href="' + url + '" target="_blank" class="fw-bold">Open Customer Approval Link</a>' : 'Payment session initialized.');
-            })
-            .fail(function (xhr) {
-                $('#dpGatewayResult').text(xhr.responseJSON?.message || 'Unable to initialize gateway payment.');
-            })
-            .always(function () { $btn.prop('disabled', false); });
-    });
+    @if(in_array(strtolower((string) ($booking->payment_gateway ?? '')), ['stripe', 'paypal'], true) && $isOtpVerified && !$isPaymentPaid && !$isFinalized)
+    setInterval(function () {
+        $.get("{{ route('delivery-person.bookings.payment-status', $booking) }}").done(function (s) {
+            if (s && s.is_payment_satisfied) {
+                window.location.reload();
+            }
+        });
+    }, 5000);
+    @endif
 
     @if($ctx['is_collection_assignee'] && $isPickedUpDone)
     $(document).on('click', '#btnRequestStoreAcceptance', function () {

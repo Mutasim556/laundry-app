@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Booking;
 use App\Models\BookingStoreEarning;
 use App\Models\BookingStoreHandover;
+use App\Models\StoreBankAccount;
 use App\Models\StoreTransaction;
 use App\Models\StoreUser;
 use App\Services\CurrencyService;
 use App\Services\StoreAccountService;
+use App\Services\StoreBankAccountService;
 use App\Services\StoreEarningsService;
 use App\Services\StoreHandoverService;
 use App\Services\StoreOperationalStatusService;
+use App\Services\StoreWithdrawalService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -28,7 +31,9 @@ class StoreDashboardController extends Controller
     public function __construct(
         protected CurrencyService $currencyService,
         protected StoreEarningsService $earningsService,
-        protected StoreAccountService $accountService
+        protected StoreAccountService $accountService,
+        protected StoreWithdrawalService $withdrawalService,
+        protected StoreBankAccountService $bankService
     ) {}
 
     protected function storeUser(): StoreUser
@@ -201,6 +206,9 @@ class StoreDashboardController extends Controller
             'operationalItems.category',
             'operationalItems.item',
             'currentStoreEarning',
+            'currentFinalDeliveryAssignment.deliveryPerson',
+            'latestStorePickupRequest.deliveryPerson',
+            'storePickupRequests.deliveryPerson',
         ]);
 
         // Strict store ownership validation
@@ -210,8 +218,10 @@ class StoreDashboardController extends Controller
 
         $booking->syncOperationalItemsFromSnapshotIfEmpty($this->currencyService);
         $categoryGroups = $booking->getActiveOperationalCategoryGroups();
+        $pricingSummary = $booking->getOperationalPricingSummary($this->currencyService, false);
+        $paymentState = app(\App\Services\CollectionPaymentService::class)->getPaymentState($booking);
 
-        // Financial data is ONLY computed/returned when Finalized workflow stage is Done & pricing complete
+        // Store earnings snapshot is only created when store commission rate is configured
         $storeEarning = $this->earningsService->getOrCreateSnapshotForBooking($booking);
         $isFinanciallyVisible = $storeEarning !== null;
 
@@ -222,6 +232,8 @@ class StoreDashboardController extends Controller
             'store' => $store,
             'booking' => $booking,
             'categoryGroups' => $categoryGroups,
+            'pricingSummary' => $pricingSummary,
+            'paymentState' => $paymentState,
             'isFinanciallyVisible' => $isFinanciallyVisible,
             'storeEarning' => $storeEarning,
             'storeStatus' => $storeStatus,
@@ -229,70 +241,75 @@ class StoreDashboardController extends Controller
         ]);
     }
 
-    public function earnings(Request $request): View
+    public function earnings(Request $request): View|JsonResponse
     {
         $storeUser = $this->storeUser();
         $store = $storeUser->store;
+        $currency = $this->withdrawalService->getStorePrimaryCurrency($store);
 
-        $validated = $request->validate([
-            'q' => ['nullable', 'string', 'max:60'],
-            'from_date' => ['nullable', 'date'],
-            'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
-        ]);
+        $month = $request->input('month');
+        $search = trim((string) $request->input('q', ''));
+        $wdStatus = $request->input('withdrawal_status');
 
-        $search = trim((string) ($validated['q'] ?? ''));
-        $fromDate = $validated['from_date'] ?? null;
-        $toDate = $validated['to_date'] ?? null;
-        $tz = (string) config('app.timezone', 'UTC');
+        $summary = $this->withdrawalService->getMonthlySummary($store, $month, $currency);
+        $activeMonth = $summary['period']['month'];
 
-        $base = BookingStoreEarning::query()
+        $earnings = $this->withdrawalService->getMonthlyEarnings($store, $activeMonth, $search, $currency);
+        $withdrawals = $this->withdrawalService->getMonthlyWithdrawals($store, $activeMonth, $wdStatus ?: null, $currency);
+        $ledgerEntries = $this->withdrawalService->getMonthlyAccountActivity($store, $activeMonth, $currency);
+
+        $bankAccounts = StoreBankAccount::query()
             ->where('store_id', $store->id)
-            ->where('is_current', true);
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderByDesc('id')
+            ->get()
+            ->map->toSafeArray()
+            ->values();
 
-        $totalEarningsByCurrency = (clone $base)
-            ->selectRaw('currency, SUM(net_store_earnings_minor) as net_minor, SUM(eligible_service_amount_minor) as base_minor, SUM(commission_amount_minor) as comm_minor')
-            ->groupBy('currency')
-            ->get();
-
-        $thisMonthStart = now($tz)->startOfMonth()->utc();
-        $currentPeriodByCurrency = (clone $base)
-            ->where('finalized_at', '>=', $thisMonthStart)
-            ->selectRaw('currency, SUM(net_store_earnings_minor) as net_minor')
-            ->groupBy('currency')
-            ->get();
-
-        $completedEarningsByCurrency = (clone $base)
-            ->whereHas('booking', fn ($q) => $q->where('booking_status', Booking::STATUS_COMPLETED))
-            ->selectRaw('currency, SUM(net_store_earnings_minor) as net_minor')
-            ->groupBy('currency')
-            ->get();
-
-        $query = (clone $base)->with('booking:id,reference,booking_status,currency');
-
-        if ($search !== '') {
-            $query->whereHas('booking', fn ($q) => $q->where('reference', 'like', "%{$search}%"));
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'currency' => $currency,
+                'summary' => $summary,
+                'summary_formatted' => [
+                    'revenue_month' => $this->currencyService->formatMinor($summary['revenue_month_minor'], $currency),
+                    'commission_month' => $this->currencyService->formatMinor($summary['commission_month_minor'], $currency),
+                    'store_share_month' => $this->currencyService->formatMinor($summary['store_share_month_minor'], $currency),
+                    'available_balance' => $this->currencyService->formatMinor($summary['available_balance_minor'], $currency),
+                    'pending_withdrawal' => $this->currencyService->formatMinor($summary['pending_withdrawal_minor'], $currency),
+                    'approved_month' => $this->currencyService->formatMinor($summary['approved_month_minor'], $currency),
+                    'settled_month' => $this->currencyService->formatMinor($summary['settled_month_minor'], $currency),
+                ],
+                'bank_accounts' => $bankAccounts,
+                'earnings_html' => view('store-portal.earnings.partials.earnings-table', [
+                    'earnings' => $earnings,
+                    'currencyService' => $this->currencyService,
+                ])->render(),
+                'withdrawals_html' => view('store-portal.earnings.partials.withdrawals-table', [
+                    'withdrawals' => $withdrawals,
+                    'currencyService' => $this->currencyService,
+                ])->render(),
+                'ledger_html' => view('store-portal.earnings.partials.ledger-table', [
+                    'ledgerEntries' => $ledgerEntries,
+                    'currencyService' => $this->currencyService,
+                ])->render(),
+            ]);
         }
-        if ($fromDate) {
-            $query->where('finalized_at', '>=', Carbon::parse($fromDate, $tz)->startOfDay()->utc());
-        }
-        if ($toDate) {
-            $query->where('finalized_at', '<=', Carbon::parse($toDate, $tz)->endOfDay()->utc());
-        }
-
-        $earnings = $query->orderByDesc('finalized_at')->orderByDesc('id')->paginate(15)->withQueryString();
 
         return view('store-portal.earnings.index', [
             'storeUser' => $storeUser,
             'store' => $store,
+            'currency' => $currency,
+            'summary' => $summary,
             'earnings' => $earnings,
-            'totalEarningsByCurrency' => $totalEarningsByCurrency,
-            'currentPeriodByCurrency' => $currentPeriodByCurrency,
-            'completedEarningsByCurrency' => $completedEarningsByCurrency,
+            'withdrawals' => $withdrawals,
+            'ledgerEntries' => $ledgerEntries,
+            'bankAccounts' => $bankAccounts,
             'currencyService' => $this->currencyService,
+            'activeWithdrawalStatus' => $wdStatus,
             'filters' => [
                 'q' => $search,
-                'from_date' => $fromDate,
-                'to_date' => $toDate,
             ],
         ]);
     }
@@ -388,10 +405,23 @@ class StoreDashboardController extends Controller
     public function profile(): View
     {
         $storeUser = $this->storeUser();
+        $store = $storeUser->store;
+        $bankAccounts = StoreBankAccount::query()
+            ->where('store_id', $store->id)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderByDesc('id')
+            ->get()
+            ->map->toSafeArray()
+            ->values();
 
         return view('store-portal.profile', [
             'storeUser' => $storeUser,
-            'store' => $storeUser->store,
+            'store' => $store,
+            'storeCurrency' => $this->withdrawalService->getStorePrimaryCurrency($store),
+            'bankAccounts' => $bankAccounts,
+            'countriesMeta' => $this->bankService->getCountriesMeta(),
+            'currencies' => \App\Support\CurrencyCatalog::CURRENCIES,
         ]);
     }
 
@@ -539,5 +569,87 @@ class StoreDashboardController extends Controller
                 'status' => $rejected->status,
             ])
             : back()->with('success', $msg);
+    }
+
+    public function markStoreComplete(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        $storeUser = $this->storeUser();
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $updated = app(\App\Services\StorePickupDeliveryService::class)->markStoreComplete(
+                $booking,
+                $storeUser,
+                $validated['note'] ?? null,
+                $request->ip()
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?: 'Unable to mark Store Complete.';
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $msg, 'errors' => $e->errors()], 422);
+            }
+            return back()->withErrors($e->errors());
+        }
+
+        $storeStatus = app(StoreOperationalStatusService::class)->getStatusForBooking($updated);
+        $msg = "Booking {$updated->reference} marked Store Complete.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'booking_status' => $updated->booking_status,
+                'booking_status_label' => $updated->getStatusLabel(),
+                'store_status' => $storeStatus,
+                'has_final_assignment' => $updated->hasValidFinalDeliveryCourierAssignment(),
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    public function requestStorePickup(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        $storeUser = $this->storeUser();
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $pickupRequest = app(\App\Services\StorePickupDeliveryService::class)->requestStorePickup(
+                $booking,
+                $storeUser,
+                $validated['note'] ?? null,
+                $request->ip()
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?: 'Unable to send store pickup request.';
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $msg, 'errors' => $e->errors()], 422);
+            }
+            return back()->withErrors($e->errors());
+        }
+
+        $msg = "Store pickup request {$pickupRequest->request_reference} sent to {$pickupRequest->deliveryPerson?->full_name}.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'pickup_request' => [
+                    'id' => $pickupRequest->id,
+                    'request_reference' => $pickupRequest->request_reference,
+                    'status' => $pickupRequest->status,
+                    'status_label' => $pickupRequest->getStatusLabel(),
+                    'requested_at' => $pickupRequest->requested_at?->format('d M Y, H:i'),
+                    'delivery_person_name' => $pickupRequest->deliveryPerson?->full_name,
+                    'delivery_person_phone' => $pickupRequest->deliveryPerson?->phone_display ?: 'Not provided',
+                ],
+            ]);
+        }
+
+        return back()->with('success', $msg);
     }
 }

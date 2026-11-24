@@ -2,8 +2,10 @@
 
 namespace Modules\Admin\Models;
 
+use App\Models\DeliveryPersonBankAccount;
 use App\Models\DeliveryPersonCashTransaction;
 use App\Models\DeliveryPersonSettlement;
+use App\Models\DeliveryPersonWithdrawalRequest;
 use App\Models\StoreUser;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
@@ -135,6 +137,16 @@ class DeliveryPerson extends Authenticatable implements CanResetPasswordContract
     public function payouts(): HasMany
     {
         return $this->hasMany(DeliveryPersonPayout::class)->orderByDesc('payment_date');
+    }
+
+    public function bankAccounts(): HasMany
+    {
+        return $this->hasMany(DeliveryPersonBankAccount::class)->orderByDesc('is_default')->orderByDesc('id');
+    }
+
+    public function withdrawalRequests(): HasMany
+    {
+        return $this->hasMany(DeliveryPersonWithdrawalRequest::class)->orderByDesc('requested_at');
     }
 
     public function getInitialsAttribute(): string

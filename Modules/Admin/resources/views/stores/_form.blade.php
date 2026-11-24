@@ -243,6 +243,10 @@
             <label class="form-label fw-semibold small mb-1" for="{{ $p }}_free_delivery_threshold">Free Delivery Over ({{ $currencySymbol }})</label>
             <input type="number" step="0.01" min="0" class="form-control" id="{{ $p }}_free_delivery_threshold" name="free_delivery_threshold" placeholder="Optional">
         </div>
+        <div class="col-md-4">
+            <label class="form-label fw-semibold small mb-1" for="{{ $p }}_commission_rate">Platform Commission Rate (%)</label>
+            <input type="number" step="0.01" min="0" max="100" class="form-control" id="{{ $p }}_commission_rate" name="commission_rate" placeholder="e.g. 15.00">
+        </div>
         <div class="col-md-4 d-flex flex-column justify-content-end gap-2 pb-1">
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="{{ $p }}_has_delivery" name="has_delivery" value="1" checked>

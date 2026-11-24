@@ -2389,11 +2389,7 @@ class BookingAddressController extends Controller
             ])->withInput();
         }
 
-        // Allow optional tip/repeat/payment fields in final submission or use already-saved confirm_options
-        $incomingPaymentMethod = $request->input(
-            'payment_method',
-            $booking['confirm_options']['payment_method'] ?? (in_array('cod', $supportedPaymentKeys, true) ? 'cod' : $supportedPaymentKeys[0])
-        );
+        $incomingPaymentMethod = $request->input('payment_method');
         $request->merge(['payment_method' => $incomingPaymentMethod]);
 
         $validated = $request->validate([
@@ -2433,14 +2429,6 @@ class BookingAddressController extends Controller
                 return back()->withErrors(['payment_method' => 'Stripe payment gateway is currently unavailable. Please select another payment method.'])->withInput();
             }
 
-            if (! $request->boolean('stripe_consent')) {
-                return back()->withErrors(['stripe_consent' => 'Please accept the payment authorization consent to pay via Stripe after weighing.'])->withInput();
-            }
-
-            $consentAccepted = true;
-            $consentTimestamp = now();
-            $consentText = 'Customer authorized future off-session charging of the verified final laundry amount after collection, weighing, and item inspection.';
-
             if (! empty($validated['saved_payment_method_id'])) {
                 $user = $request->user();
                 $savedPm = $user
@@ -2451,14 +2439,16 @@ class BookingAddressController extends Controller
                     return back()->withErrors(['payment_method' => 'Selected saved card was not found or does not belong to your account.'])->withInput();
                 }
 
+                $consentAccepted = $request->boolean('stripe_consent', true);
+                $consentTimestamp = now();
+                $consentText = 'Customer authorized future off-session charging of the verified final laundry amount after collection, weighing, and item inspection.';
                 $stripeCustomerId = $savedPm->stripe_customer_id;
                 $stripePaymentMethodId = $savedPm->stripe_payment_method_id;
                 $paymentStatus = 'authorized_for_later_charge';
-            } else {
-                if (empty($validated['stripe_setup_intent_id']) || empty($validated['stripe_payment_method_id'])) {
-                    return back()->withErrors(['payment_method' => 'Please complete your card details via Stripe before continuing.'])->withInput();
-                }
-
+            } elseif (! empty($validated['stripe_setup_intent_id']) && ! empty($validated['stripe_payment_method_id'])) {
+                $consentAccepted = $request->boolean('stripe_consent', true);
+                $consentTimestamp = now();
+                $consentText = 'Customer authorized future off-session charging of the verified final laundry amount after collection, weighing, and item inspection.';
                 $stripeSetupIntentId = trim($validated['stripe_setup_intent_id']);
                 $stripePaymentMethodId = trim($validated['stripe_payment_method_id']);
                 $paymentStatus = 'authorized_for_later_charge';
@@ -2483,6 +2473,9 @@ class BookingAddressController extends Controller
                         // Do not block booking if metadata sync fails; card is still attached to SetupIntent
                     }
                 }
+            } else {
+                // Simplified Confirm flow: customer selects Stripe payment mode and proceeds immediately
+                $paymentStatus = 'awaiting_final_amount';
             }
         }
 

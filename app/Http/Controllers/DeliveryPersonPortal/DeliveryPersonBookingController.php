@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Modules\Admin\Models\DeliveryPerson;
 use Modules\Admin\Models\ItemCategory;
@@ -46,11 +47,71 @@ class DeliveryPersonBookingController extends Controller
         return $ctx;
     }
 
-    public function show(Booking $booking): View
+    public function show(Request $request, Booking $booking): View
     {
         $person = $this->person();
         $ctx = $this->authorizeBookingContext($booking);
 
+        $requestedType = $request->query('type');
+        if ($requestedType === \Modules\Admin\Models\DeliveryAssignment::TYPE_FINAL_DELIVERY && $ctx['is_final_assignee']) {
+            return $this->renderJobView($booking, $person, $ctx, 'final');
+        }
+        if ($requestedType === \Modules\Admin\Models\DeliveryAssignment::TYPE_CUSTOMER_COLLECTION && $ctx['is_collection_assignee']) {
+            return $this->renderJobView($booking, $person, $ctx, 'collection');
+        }
+
+        $mode = (! $ctx['is_collection_assignee'] && $ctx['is_final_assignee']) ? 'final' : 'collection';
+
+        return $this->renderJobView($booking, $person, $ctx, $mode);
+    }
+
+    public function showCollectionJob(\Modules\Admin\Models\DeliveryAssignment $assignment): View
+    {
+        $person = $this->person();
+        if (
+            (int) $assignment->delivery_person_id !== (int) $person->id
+            || $assignment->assignment_type !== \Modules\Admin\Models\DeliveryAssignment::TYPE_CUSTOMER_COLLECTION
+            || in_array($assignment->status, [
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_CANCELLED,
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_FAILED,
+            ], true)
+        ) {
+            abort(403, 'You are not authorized to access this collection job.');
+        }
+
+        $booking = $assignment->booking()->firstOrFail();
+        $ctx = $this->authorizeBookingContext($booking);
+
+        return $this->renderJobView($booking, $person, $ctx, 'collection', $assignment);
+    }
+
+    public function showFinalDeliveryJob(\Modules\Admin\Models\DeliveryAssignment $assignment): View
+    {
+        $person = $this->person();
+        if (
+            (int) $assignment->delivery_person_id !== (int) $person->id
+            || $assignment->assignment_type !== \Modules\Admin\Models\DeliveryAssignment::TYPE_FINAL_DELIVERY
+            || in_array($assignment->status, [
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_CANCELLED,
+                \Modules\Admin\Models\DeliveryAssignment::STATUS_FAILED,
+            ], true)
+        ) {
+            abort(403, 'You are not authorized to access this final delivery job.');
+        }
+
+        $booking = $assignment->booking()->firstOrFail();
+        $ctx = $this->authorizeBookingContext($booking);
+
+        return $this->renderJobView($booking, $person, $ctx, 'final', $assignment);
+    }
+
+    protected function renderJobView(
+        Booking $booking,
+        DeliveryPerson $person,
+        array $ctx,
+        string $mode,
+        ?\Modules\Admin\Models\DeliveryAssignment $explicitAssignment = null
+    ): View {
         $booking->syncOperationalItemsFromSnapshotIfEmpty($this->currencyService);
         $booking->load([
             'operationalItems.service',
@@ -61,6 +122,8 @@ class DeliveryPersonBookingController extends Controller
             'currentStoreHandover.acceptedByStoreUser',
             'currentStoreHandover.rejectedByStoreUser',
             'storeHandovers',
+            'latestStorePickupRequest.store',
+            'storePickupRequests.store',
             'user',
             'customerPayments' => fn ($q) => $q->orderByDesc('id'),
         ]);
@@ -69,19 +132,29 @@ class DeliveryPersonBookingController extends Controller
         $paymentState = $this->paymentService->getPaymentState($booking);
         $categoryGroups = $this->editorService->buildCategoryGroups($booking, null, null, $person);
 
-        if (! $ctx['is_collection_assignee'] && $ctx['is_final_assignee']) {
+        if ($mode === 'final') {
+            $job = $explicitAssignment ?? $ctx['final_assignment'];
+            $job?->loadMissing(['latestPickupRequest', 'ledgerEntries', 'store']);
+
             return view('delivery-person-portal.bookings.final-show', [
                 'person' => $person,
                 'booking' => $booking,
+                'job' => $job,
                 'ctx' => $ctx,
                 'categoryGroups' => $categoryGroups,
+                'pricingSummary' => $pricingSummary,
+                'paymentState' => $paymentState,
                 'currencyService' => $this->currencyService,
             ]);
         }
 
+        $job = $explicitAssignment ?? $ctx['collection_assignment'];
+        $job?->loadMissing(['ledgerEntries', 'store']);
+
         return view('delivery-person-portal.bookings.show', [
             'person' => $person,
             'booking' => $booking,
+            'job' => $job,
             'ctx' => $ctx,
             'categoryGroups' => $categoryGroups,
             'pricingSummary' => $pricingSummary,
@@ -367,34 +440,44 @@ class DeliveryPersonBookingController extends Controller
 
     public function initiateStripe(Booking $booking): JsonResponse
     {
-        $ctx = $this->authorizeBookingContext($booking);
-        if (! $ctx['can_collect_payment']) {
-            abort(403, 'Unauthorized.');
-        }
+        $this->authorizeBookingContext($booking);
 
-        try {
-            $intent = $this->paymentService->initiateStripeSession($booking, $this->person());
-
-            return response()->json(['success' => true, 'intent' => $intent]);
-        } catch (RuntimeException $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
-        }
+        return response()->json([
+            'success' => false,
+            'message' => 'Online payments must be completed by the customer on their own account.',
+        ], 403);
     }
 
     public function initiatePayPal(Booking $booking): JsonResponse
     {
-        $ctx = $this->authorizeBookingContext($booking);
-        if (! $ctx['can_collect_payment']) {
-            abort(403, 'Unauthorized.');
-        }
+        $this->authorizeBookingContext($booking);
 
-        try {
-            $order = $this->paymentService->initiatePayPalOrder($booking, $this->person());
+        return response()->json([
+            'success' => false,
+            'message' => 'Online payments must be completed by the customer on their own account.',
+        ], 403);
+    }
 
-            return response()->json(['success' => true, 'order' => $order]);
-        } catch (RuntimeException $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
-        }
+    public function paymentStatus(Booking $booking): JsonResponse
+    {
+        $this->authorizeBookingContext($booking);
+        $booking->refresh();
+        $state = $this->paymentService->getPaymentState($booking);
+
+        return response()->json([
+            'success' => true,
+            'payment_status' => $booking->payment_status,
+            'payment_status_label' => $booking->getFinancialPaymentStatusLabel(),
+            'is_pricing_complete' => $state['is_pricing_complete'],
+            'pricing_status_label' => $state['pricing']['pricing_status_label'] ?? ($state['is_pricing_complete'] ? 'Finalized' : 'Pending'),
+            'total_minor' => $state['total_minor'],
+            'confirmed_paid_minor' => $state['confirmed_paid_minor'],
+            'outstanding_minor' => $state['outstanding_minor'],
+            'is_payment_satisfied' => $state['is_payment_satisfied'],
+            'formatted_total' => $this->currencyService->formatMinor($state['total_minor'], $state['currency']),
+            'formatted_paid' => $this->currencyService->formatMinor($state['confirmed_paid_minor'], $state['currency']),
+            'formatted_outstanding' => $this->currencyService->formatMinor($state['outstanding_minor'], $state['currency']),
+        ]);
     }
 
     public function finalize(Booking $booking): RedirectResponse
@@ -470,6 +553,159 @@ class DeliveryPersonBookingController extends Controller
                     'status' => $handover->status,
                     'requested_at' => $handover->requested_at?->format('d M Y, H:i'),
                 ],
+            ])
+            : back()->with('success', $msg);
+    }
+
+    public function acceptPickupRequest(Request $request, \App\Models\BookingStorePickupRequest $pickupRequest): RedirectResponse|JsonResponse
+    {
+        $person = $this->person();
+        if ((int) $pickupRequest->delivery_person_id !== (int) $person->id) {
+            abort(403, 'You are not authorized to accept this pickup request.');
+        }
+
+        try {
+            $accepted = app(\App\Services\StorePickupDeliveryService::class)->acceptPickupRequest(
+                $pickupRequest,
+                $person,
+                $request->ip()
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?: 'Unable to accept pickup request.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg, 'errors' => $e->errors()], 422)
+                : back()->withErrors($e->errors());
+        }
+
+        $msg = "Accepted store pickup request {$accepted->request_reference}. Proceed to store to collect parcel.";
+
+        return $request->expectsJson()
+            ? response()->json([
+                'success' => true,
+                'message' => $msg,
+                'pickup_request' => [
+                    'id' => $accepted->id,
+                    'status' => $accepted->status,
+                    'status_label' => $accepted->getStatusLabel(),
+                    'accepted_at' => $accepted->accepted_at?->format('d M Y, H:i'),
+                ],
+            ])
+            : back()->with('success', $msg);
+    }
+
+    public function declinePickupRequest(Request $request, \App\Models\BookingStorePickupRequest $pickupRequest): RedirectResponse|JsonResponse
+    {
+        $person = $this->person();
+        if ((int) $pickupRequest->delivery_person_id !== (int) $person->id) {
+            abort(403, 'You are not authorized to decline this pickup request.');
+        }
+
+        $validated = $request->validate([
+            'decline_reason' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        try {
+            $declined = app(\App\Services\StorePickupDeliveryService::class)->declinePickupRequest(
+                $pickupRequest,
+                $person,
+                $validated['decline_reason'],
+                $request->ip()
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?: 'Unable to decline pickup request.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg, 'errors' => $e->errors()], 422)
+                : back()->withErrors($e->errors());
+        }
+
+        $msg = "Declined store pickup request {$declined->request_reference}.";
+
+        return $request->expectsJson()
+            ? response()->json([
+                'success' => true,
+                'message' => $msg,
+                'pickup_request' => [
+                    'id' => $declined->id,
+                    'status' => $declined->status,
+                    'status_label' => $declined->getStatusLabel(),
+                    'declined_at' => $declined->declined_at?->format('d M Y, H:i'),
+                ],
+            ])
+            : back()->with('success', $msg);
+    }
+
+    public function confirmStorePickup(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        $person = $this->person();
+        $ctx = $this->authorizeBookingContext($booking);
+        if (! $ctx['is_final_assignee']) {
+            abort(403, 'Only the assigned Final Delivery Person can confirm physical store pickup.');
+        }
+
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $updated = app(\App\Services\StorePickupDeliveryService::class)->confirmCollectedFromStore(
+                $booking,
+                $person,
+                $validated['notes'] ?? null,
+                $request->ip()
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?: 'Unable to confirm store pickup.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg, 'errors' => $e->errors()], 422)
+                : back()->withErrors($e->errors());
+        }
+
+        $msg = "Confirmed collection from store for {$updated->reference}. Booking is now On Delivery.";
+
+        return $request->expectsJson()
+            ? response()->json([
+                'success' => true,
+                'message' => $msg,
+                'booking_status' => $updated->booking_status,
+                'booking_status_label' => $updated->getStatusLabel(),
+            ])
+            : back()->with('success', $msg);
+    }
+
+    public function confirmDelivered(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        $person = $this->person();
+        $ctx = $this->authorizeBookingContext($booking);
+        if (! $ctx['is_final_assignee']) {
+            abort(403, 'Only the assigned Final Delivery Person can confirm customer delivery.');
+        }
+
+        $validated = $request->validate([
+            'proof_of_delivery_notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $completed = app(\App\Services\StorePickupDeliveryService::class)->confirmDeliveredToCustomer(
+                $booking,
+                $person,
+                $validated['proof_of_delivery_notes'] ?? null,
+                $request->ip()
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?: 'Unable to complete final delivery.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg, 'errors' => $e->errors()], 422)
+                : back()->withErrors($e->errors());
+        }
+
+        $msg = "Delivery confirmed for {$completed->reference}. Booking is now Completed and earnings have been credited.";
+
+        return $request->expectsJson()
+            ? response()->json([
+                'success' => true,
+                'message' => $msg,
+                'booking_status' => $completed->booking_status,
+                'booking_status_label' => $completed->getStatusLabel(),
             ])
             : back()->with('success', $msg);
     }

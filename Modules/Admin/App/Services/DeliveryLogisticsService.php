@@ -612,9 +612,19 @@ class DeliveryLogisticsService
             ->where('transaction_type', DeliveryPersonLedgerEntry::TYPE_PAYOUT_REVERSAL)
             ->sum('amount_minor');
 
+        $withdrawalReservedMinor = (int) $entries
+            ->where('transaction_type', DeliveryPersonLedgerEntry::TYPE_WITHDRAWAL_RESERVATION)
+            ->sum('amount_minor');
+
+        $withdrawalReleasedMinor = (int) $entries
+            ->where('transaction_type', DeliveryPersonLedgerEntry::TYPE_WITHDRAWAL_RELEASE)
+            ->sum('amount_minor');
+
+        $netWithdrawalCommittedMinor = max(0, $withdrawalReservedMinor - $withdrawalReleasedMinor);
+
         $netPaidMinor = $totalPaidMinor - $payoutReversalsMinor;
         $totalPayableMinor = $earningsMinor + $netAdjustmentsMinor;
-        $outstandingMinor = max(0, $totalPayableMinor - $netPaidMinor);
+        $outstandingMinor = max(0, $totalPayableMinor - $netPaidMinor - $netWithdrawalCommittedMinor);
 
         $pendingMinor = (int) $person->assignments()
             ->where('earnings_status', 'pending')

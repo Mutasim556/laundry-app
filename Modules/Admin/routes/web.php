@@ -207,6 +207,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->middleware('permission:view-delivery-persons|manage-delivery-assignments,admin')
             ->name('delivery-activity.index');
 
+        // Store Withdrawal Requests (Manual Review & Settlement)
+        Route::prefix('store-withdrawals')->name('store-withdrawals.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\StoreWithdrawalController::class, 'index'])
+                ->middleware('permission:view-store-accounts|view-stores|manage-delivery-payouts,admin')->name('index');
+            Route::get('{withdrawal}', [\Modules\Admin\App\Http\Controllers\StoreWithdrawalController::class, 'show'])
+                ->middleware('permission:view-store-accounts|view-stores|manage-delivery-payouts,admin')->name('show');
+            Route::post('{withdrawal}/approve', [\Modules\Admin\App\Http\Controllers\StoreWithdrawalController::class, 'approve'])
+                ->middleware('permission:adjust-store-accounts|manage-delivery-payouts,admin')->name('approve');
+            Route::post('{withdrawal}/reject', [\Modules\Admin\App\Http\Controllers\StoreWithdrawalController::class, 'reject'])
+                ->middleware('permission:adjust-store-accounts|manage-delivery-payouts,admin')->name('reject');
+            Route::post('{withdrawal}/settle', [\Modules\Admin\App\Http\Controllers\StoreWithdrawalController::class, 'settle'])
+                ->middleware('permission:adjust-store-accounts|manage-delivery-payouts,admin')->name('settle');
+        });
+
         // Delivery Account Balances & Payouts
         Route::prefix('delivery-payouts')->name('delivery-payouts.')->group(function () {
             Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryPayoutController::class, 'index'])
@@ -215,6 +229,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 ->middleware('permission:manage-delivery-payouts,admin')->name('store');
             Route::post('adjustments', [\Modules\Admin\App\Http\Controllers\DeliveryPayoutController::class, 'storeAdjustment'])
                 ->middleware('permission:manage-delivery-payouts,admin')->name('adjustments.store');
+        });
+
+        // Delivery Person Bank Withdrawal Requests (Manual Review & Settlement)
+        Route::prefix('delivery-person-withdrawals')->name('delivery-person-withdrawals.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryWithdrawalController::class, 'index'])
+                ->middleware('permission:manage-delivery-payouts|view-delivery-persons,admin')->name('index');
+            Route::get('{withdrawal}', [\Modules\Admin\App\Http\Controllers\DeliveryWithdrawalController::class, 'show'])
+                ->middleware('permission:manage-delivery-payouts|view-delivery-persons,admin')->name('show');
+            Route::post('{withdrawal}/approve', [\Modules\Admin\App\Http\Controllers\DeliveryWithdrawalController::class, 'approve'])
+                ->middleware('permission:manage-delivery-payouts,admin')->name('approve');
+            Route::post('{withdrawal}/reject', [\Modules\Admin\App\Http\Controllers\DeliveryWithdrawalController::class, 'reject'])
+                ->middleware('permission:manage-delivery-payouts,admin')->name('reject');
+            Route::post('{withdrawal}/settle', [\Modules\Admin\App\Http\Controllers\DeliveryWithdrawalController::class, 'settle'])
+                ->middleware('permission:manage-delivery-payouts,admin')->name('settle');
         });
 
         // UK Address Management
@@ -390,12 +418,69 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'index'])
                 ->middleware('permission:view-admin-accounts,admin')
                 ->name('index');
+            Route::get('/transactions', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'transactions'])
+                ->middleware('permission:view-admin-accounts,admin')
+                ->name('transactions');
+            Route::get('/export', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'export'])
+                ->middleware('permission:view-admin-accounts,admin')
+                ->name('export');
+            Route::post('/stripe-sync', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'syncStripeFees'])
+                ->middleware('permission:view-admin-accounts,admin')
+                ->name('stripe-sync');
+            Route::get('/transactions/{uid}/detail', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'detail'])
+                ->middleware('permission:view-admin-accounts,admin')
+                ->name('detail');
             Route::post('/adjust', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'adjust'])
                 ->middleware('permission:adjust-admin-accounts,admin')
                 ->name('adjust');
             Route::post('/transactions/{transaction}/reverse', [\Modules\Admin\App\Http\Controllers\AdminAccountController::class, 'reverse'])
                 ->middleware('permission:adjust-admin-accounts,admin')
                 ->name('reverse');
+        });
+
+        // Dynamic Refund, Rewash & Return Policy + Case Management
+        Route::prefix('refund-returns')->name('refund-returns.')->group(function () {
+            Route::get('/cases', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'index'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('cases.index');
+            Route::get('/cases/{claim}', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'show'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('cases.show');
+            Route::post('/cases/{claim}/status', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'updateStatus'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('cases.status');
+            Route::post('/cases/{claim}/refunds', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'approveAndCreateRefund'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('cases.refunds.store');
+            Route::post('/cases/{claim}/rewash', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'scheduleRewash'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('cases.rewash');
+            Route::post('/cases/{claim}/liability', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'applyLiability'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('cases.liability');
+
+            Route::get('/refunds', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'refundsIndex'])
+                ->middleware('permission:view-bookings|view-admin-accounts,admin')
+                ->name('refunds.index');
+            Route::post('/refunds/{refund}/execute', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'executeRefund'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('refunds.execute');
+            Route::post('/refunds/{refund}/cod-paid', [\Modules\Admin\App\Http\Controllers\ClaimManagementController::class, 'markCodPaid'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('refunds.cod-paid');
+
+            Route::get('/policies', [\Modules\Admin\App\Http\Controllers\RefundReturnPolicyController::class, 'index'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('policies.index');
+            Route::get('/policies/history', [\Modules\Admin\App\Http\Controllers\RefundReturnPolicyController::class, 'history'])
+                ->middleware('permission:view-bookings|manage-bookings,admin')
+                ->name('policies.history');
+            Route::post('/policies/draft', [\Modules\Admin\App\Http\Controllers\RefundReturnPolicyController::class, 'storeDraft'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('policies.draft');
+            Route::post('/policies/versions/{version}/publish', [\Modules\Admin\App\Http\Controllers\RefundReturnPolicyController::class, 'publish'])
+                ->middleware('permission:manage-bookings,admin')
+                ->name('policies.publish');
         });
 
         // Delivery Person Cash Settlements, Online Transfer Verification & Portal Access

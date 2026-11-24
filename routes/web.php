@@ -133,6 +133,13 @@ Route::prefix('booking')->name('booking.')->group(function () {
         ->middleware('auth:web')
         ->name('stripe.saved-cards.destroy');
 
+    // Stripe Checkout Return & Cancel (signed URLs)
+    Route::get('/stripe/bookings/{booking}/return', [StripePaymentController::class, 'checkoutReturn'])
+        ->name('stripe.return');
+    Route::get('/stripe/bookings/{booking}/cancel', [StripePaymentController::class, 'checkoutCancel'])
+        ->middleware('signed')
+        ->name('stripe.cancel');
+
     // PayPal Order & Capture
     Route::post('/paypal/bookings/{booking}/order', [PayPalPaymentController::class, 'createOrder'])
         ->middleware('throttle:30,1')
@@ -150,6 +157,12 @@ Route::prefix('my-orders')->name('orders.')->group(function () {
     Route::get('/', [CustomerBookingController::class, 'index'])->middleware('auth')->name('index');
     Route::post('/lookup', [CustomerBookingController::class, 'lookup'])->middleware('throttle:20,1')->name('lookup');
     Route::get('/{reference}', [CustomerBookingController::class, 'show'])->name('show');
+    Route::get('/{reference}/payment-status', [CustomerBookingController::class, 'paymentStatus'])->name('payment-status');
+    Route::post('/{reference}/stripe/payment-intent', [CustomerBookingController::class, 'createStripePaymentIntent'])->middleware(['auth', 'throttle:20,1'])->name('stripe.payment-intent');
+    Route::post('/{reference}/pay/stripe', [CustomerBookingController::class, 'payWithStripe'])->middleware(['auth', 'throttle:20,1'])->name('pay.stripe');
+    Route::post('/{reference}/pay/paypal', [CustomerBookingController::class, 'payWithPayPal'])->middleware(['auth', 'throttle:20,1'])->name('pay.paypal');
+    Route::post('/{reference}/claims', [\App\Http\Controllers\CustomerClaimController::class, 'store'])->middleware('throttle:15,1')->name('claims.store');
+    Route::get('/claims/evidence/{evidence}', [\App\Http\Controllers\CustomerClaimController::class, 'downloadEvidence'])->name('claims.evidence');
     Route::match(['put', 'patch'], '/{reference}', [CustomerBookingController::class, 'rejectMutation'])->name('update');
     Route::delete('/{reference}', [CustomerBookingController::class, 'rejectMutation'])->name('destroy');
 });

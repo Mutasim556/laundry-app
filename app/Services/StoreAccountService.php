@@ -182,6 +182,100 @@ class StoreAccountService
         });
     }
 
+    public function postWithdrawalReservation(
+        Store $store,
+        string $currency,
+        int $amountMinor,
+        string $description,
+        string $idempotencyKey
+    ): StoreTransaction {
+        if ($amountMinor <= 0) {
+            throw new RuntimeException('Withdrawal reservation amount must be greater than zero.');
+        }
+
+        return DB::transaction(function () use ($store, $currency, $amountMinor, $description, $idempotencyKey) {
+            if ($existing = StoreTransaction::where('idempotency_key', $idempotencyKey)->first()) {
+                return $existing;
+            }
+
+            $account = $this->lockOrCreateAccount($store->id, $currency);
+            $currentMinor = self::decimalToMinor($account->current_balance);
+            $debitedMinor = self::decimalToMinor($account->total_debited);
+
+            if ($amountMinor > $currentMinor) {
+                throw new RuntimeException('Insufficient store available balance for withdrawal reservation.');
+            }
+
+            $newBalanceMinor = $currentMinor - $amountMinor;
+            $debitedMinor += $amountMinor;
+
+            $tx = StoreTransaction::create([
+                'store_id' => $store->id,
+                'transaction_type' => StoreTransaction::TYPE_WITHDRAWAL_RESERVATION,
+                'direction' => StoreTransaction::DIRECTION_DEBIT,
+                'amount' => self::minorToDecimal($amountMinor),
+                'currency' => strtoupper($currency),
+                'balance_after' => self::minorToDecimal($newBalanceMinor),
+                'reference' => $this->generateUniqueReference(),
+                'idempotency_key' => $idempotencyKey,
+                'description' => trim($description),
+            ]);
+
+            $account->update([
+                'current_balance' => self::minorToDecimal($newBalanceMinor),
+                'total_debited' => self::minorToDecimal($debitedMinor),
+            ]);
+
+            return $tx;
+        });
+    }
+
+    public function postWithdrawalRelease(
+        Store $store,
+        string $currency,
+        int $amountMinor,
+        string $description,
+        string $idempotencyKey,
+        int $adminId
+    ): StoreTransaction {
+        if ($amountMinor <= 0) {
+            throw new RuntimeException('Withdrawal release amount must be greater than zero.');
+        }
+
+        return DB::transaction(function () use ($store, $currency, $amountMinor, $description, $idempotencyKey, $adminId) {
+            if ($existing = StoreTransaction::where('idempotency_key', $idempotencyKey)->first()) {
+                return $existing;
+            }
+
+            $account = $this->lockOrCreateAccount($store->id, $currency);
+            $currentMinor = self::decimalToMinor($account->current_balance);
+            $creditedMinor = self::decimalToMinor($account->total_credited);
+
+            $newBalanceMinor = $currentMinor + $amountMinor;
+            $creditedMinor += $amountMinor;
+
+            $tx = StoreTransaction::create([
+                'store_id' => $store->id,
+                'transaction_type' => StoreTransaction::TYPE_WITHDRAWAL_RELEASE,
+                'direction' => StoreTransaction::DIRECTION_CREDIT,
+                'amount' => self::minorToDecimal($amountMinor),
+                'currency' => strtoupper($currency),
+                'balance_after' => self::minorToDecimal($newBalanceMinor),
+                'reference' => $this->generateUniqueReference(),
+                'idempotency_key' => $idempotencyKey,
+                'description' => trim($description),
+                'created_by_admin_id' => $adminId,
+            ]);
+
+            $account->update([
+                'current_balance' => self::minorToDecimal($newBalanceMinor),
+                'total_credited' => self::minorToDecimal($creditedMinor),
+            ]);
+
+            return $tx;
+        });
+    }
+
     public function createReversal(
         StoreTransaction $originalTx,
         string $reason,

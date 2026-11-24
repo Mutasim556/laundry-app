@@ -4,10 +4,14 @@ namespace App\Http\Controllers\DeliveryPersonPortal;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\DeliveryPersonBankAccount;
 use App\Models\DeliveryPersonCashTransaction;
 use App\Models\DeliveryPersonSettlement;
 use App\Services\CurrencyService;
+use App\Services\DeliveryPersonBankAccountService;
 use App\Services\DeliveryPersonCashService;
+use App\Services\DeliveryPersonWithdrawalService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -20,7 +24,9 @@ class DeliveryPersonDashboardController extends Controller
 {
     public function __construct(
         protected CurrencyService $currencyService,
-        protected DeliveryPersonCashService $cashService
+        protected DeliveryPersonCashService $cashService,
+        protected DeliveryPersonWithdrawalService $withdrawalService,
+        protected DeliveryPersonBankAccountService $bankService
     ) {}
 
     protected function person(): DeliveryPerson
@@ -59,11 +65,18 @@ class DeliveryPersonDashboardController extends Controller
         $earningsBalanceMinor = $this->cashService->getEarningsBalanceMinor($person, $currency);
 
         $recentAssignments = DeliveryAssignment::query()
-            ->with(['booking', 'store'])
+            ->with(['booking', 'store', 'latestPickupRequest'])
             ->where('delivery_person_id', $person->id)
-            ->whereNotIn('status', [DeliveryAssignment::STATUS_CANCELLED])
+            ->whereNotIn('status', [DeliveryAssignment::STATUS_CANCELLED, DeliveryAssignment::STATUS_FAILED])
             ->orderByDesc('id')
             ->limit(8)
+            ->get();
+
+        $pendingPickupRequests = \App\Models\BookingStorePickupRequest::query()
+            ->with(['booking', 'store', 'deliveryAssignment'])
+            ->where('delivery_person_id', $person->id)
+            ->where('status', \App\Models\BookingStorePickupRequest::STATUS_PENDING)
+            ->orderByDesc('requested_at')
             ->get();
 
         return view('delivery-person-portal.dashboard', [
@@ -77,6 +90,7 @@ class DeliveryPersonDashboardController extends Controller
             'cashSummary' => $cashSummary,
             'earningsBalanceMinor' => $earningsBalanceMinor,
             'recentAssignments' => $recentAssignments,
+            'pendingPickupRequests' => $pendingPickupRequests,
         ]);
     }
 
@@ -98,34 +112,72 @@ class DeliveryPersonDashboardController extends Controller
     protected function listAssignments(Request $request, ?string $type, string $heading): View
     {
         $person = $this->person();
+        $jobTypeFilter = $type ?? ($request->filled('job_type') ? (string) $request->input('job_type') : null);
+        $statusFilter = $request->filled('status_filter') ? (string) $request->input('status_filter') : null;
 
-        $query = Booking::query()
-            ->with(['assignedStore', 'currentCollectionAssignment', 'currentFinalDeliveryAssignment'])
-            ->whereHas('deliveryAssignments', function ($q) use ($person, $type) {
-                $q->where('delivery_person_id', $person->id)
-                    ->whereNotIn('status', [DeliveryAssignment::STATUS_CANCELLED, DeliveryAssignment::STATUS_FAILED]);
-                if ($type !== null) {
-                    $q->where('assignment_type', $type);
-                }
-            })
+        $query = DeliveryAssignment::query()
+            ->with(['booking.assignedStore', 'store', 'latestPickupRequest', 'ledgerEntries'])
+            ->where('delivery_person_id', $person->id)
+            ->whereNotIn('status', [DeliveryAssignment::STATUS_CANCELLED, DeliveryAssignment::STATUS_FAILED])
+            ->whereHas('booking')
             ->orderByDesc('id');
+
+        if ($jobTypeFilter !== null && in_array($jobTypeFilter, [
+            DeliveryAssignment::TYPE_CUSTOMER_COLLECTION,
+            DeliveryAssignment::TYPE_FINAL_DELIVERY,
+        ], true)) {
+            $query->where('assignment_type', $jobTypeFilter);
+        }
 
         if ($request->filled('search')) {
             $term = trim((string) $request->input('search'));
-            $query->where(function ($q) use ($term) {
-                $q->where('reference', 'like', "%{$term}%")
-                    ->orWhere('customer_name', 'like', "%{$term}%")
-                    ->orWhere('customer_phone', 'like', "%{$term}%");
+            $numericId = null;
+            if (preg_match('/^(?:COL|DEL)-0*(\d+)$/i', $term, $m)) {
+                $numericId = (int) $m[1];
+            }
+
+            $query->where(function ($q) use ($term, $numericId) {
+                $q->where('assignment_reference', 'like', "%{$term}%")
+                    ->orWhere('assignment_type', 'like', "%{$term}%")
+                    ->orWhere('status', 'like', "%{$term}%")
+                    ->orWhereHas('booking', function ($bq) use ($term) {
+                        $bq->where('reference', 'like', "%{$term}%")
+                            ->orWhere('customer_name', 'like', "%{$term}%")
+                            ->orWhere('customer_phone', 'like', "%{$term}%");
+                    })
+                    ->orWhereHas('store', fn ($sq) => $sq->where('name', 'like', "%{$term}%"));
+
+                if ($numericId !== null) {
+                    $q->orWhere('id', $numericId);
+                }
             });
         }
 
-        $bookings = $query->paginate(15)->withQueryString();
+        if ($statusFilter !== null && $statusFilter !== '') {
+            $all = $query->get()->filter(function (DeliveryAssignment $asg) use ($statusFilter) {
+                return $asg->getJobStatusDisplay()['key'] === $statusFilter;
+            })->values();
+
+            $perPage = 15;
+            $page = \Illuminate\Pagination\Paginator::resolveCurrentPage();
+            $assignments = new \Illuminate\Pagination\LengthAwarePaginator(
+                $all->forPage($page, $perPage)->values(),
+                $all->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+        } else {
+            $assignments = $query->paginate(15)->withQueryString();
+        }
 
         return view('delivery-person-portal.bookings.index', [
             'person' => $person,
             'heading' => $heading,
             'filterType' => $type,
-            'bookings' => $bookings,
+            'jobTypeFilter' => $jobTypeFilter,
+            'statusFilter' => $statusFilter,
+            'assignments' => $assignments,
             'currencyService' => $this->currencyService,
         ]);
     }
@@ -189,34 +241,91 @@ class DeliveryPersonDashboardController extends Controller
         ]);
     }
 
-    public function earnings(): View
+    public function earnings(Request $request): View|JsonResponse
     {
         $person = $this->person();
         $currency = strtoupper((string) ($person->currency ?: $this->currencyService->code()));
-        $earningsBalanceMinor = $this->cashService->getEarningsBalanceMinor($person, $currency);
+        $month = $request->input('month');
+        $jobType = $request->input('job_type');
+        $wdStatus = $request->input('withdrawal_status');
 
-        $entries = DB::table('delivery_person_ledger_entries')
-            ->leftJoin('bookings', 'bookings.id', '=', 'delivery_person_ledger_entries.booking_id')
-            ->where('delivery_person_ledger_entries.delivery_person_id', $person->id)
-            ->orderByDesc('delivery_person_ledger_entries.id')
-            ->select('delivery_person_ledger_entries.*', 'bookings.reference as booking_reference')
-            ->paginate(20);
+        $summary = $this->withdrawalService->getMonthlySummary($person, (string) $month, $currency);
+        $activeMonth = $summary['period']['month'];
+
+        $earningsEntries = $this->withdrawalService->getMonthlyEarningsEntries($person, $activeMonth, $jobType ?: null);
+        $withdrawals = $this->withdrawalService->getMonthlyWithdrawals($person, $activeMonth, $wdStatus ?: null);
+        $ledgerEntries = $this->withdrawalService->getMonthlyLedgerActivity($person, $activeMonth);
+
+        $bankAccounts = DeliveryPersonBankAccount::query()
+            ->where('delivery_person_id', $person->id)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderByDesc('id')
+            ->get()
+            ->map->toSafeArray()
+            ->values();
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'currency' => $currency,
+                'summary' => $summary,
+                'summary_formatted' => [
+                    'earned_month' => $this->currencyService->formatMinor($summary['earned_month_minor'], $currency),
+                    'collection_month' => $this->currencyService->formatMinor($summary['collection_month_minor'], $currency),
+                    'final_delivery_month' => $this->currencyService->formatMinor($summary['final_delivery_month_minor'], $currency),
+                    'available_balance' => $this->currencyService->formatMinor($summary['available_balance_minor'], $currency),
+                    'pending_withdrawal' => $this->currencyService->formatMinor($summary['pending_withdrawal_minor'], $currency),
+                    'approved_month' => $this->currencyService->formatMinor($summary['approved_month_minor'], $currency),
+                ],
+                'bank_accounts' => $bankAccounts,
+                'earnings_html' => view('delivery-person-portal.partials.earnings-table', [
+                    'earningsEntries' => $earningsEntries,
+                    'currencyService' => $this->currencyService,
+                ])->render(),
+                'withdrawals_html' => view('delivery-person-portal.partials.withdrawals-table', [
+                    'withdrawals' => $withdrawals,
+                    'currencyService' => $this->currencyService,
+                ])->render(),
+                'ledger_html' => view('delivery-person-portal.partials.ledger-table', [
+                    'ledgerEntries' => $ledgerEntries,
+                    'currencyService' => $this->currencyService,
+                ])->render(),
+            ]);
+        }
 
         return view('delivery-person-portal.earnings', [
             'person' => $person,
             'currency' => $currency,
             'currencyService' => $this->currencyService,
-            'earningsBalanceMinor' => $earningsBalanceMinor,
-            'entries' => $entries,
+            'summary' => $summary,
+            'earningsEntries' => $earningsEntries,
+            'withdrawals' => $withdrawals,
+            'ledgerEntries' => $ledgerEntries,
+            'bankAccounts' => $bankAccounts,
+            'activeJobType' => $jobType,
+            'activeWithdrawalStatus' => $wdStatus,
+            'countriesMeta' => $this->bankService->getCountriesMeta(),
         ]);
     }
 
     public function profile(): View
     {
         $person = $this->person()->load(['store', 'postcodes']);
+        $bankAccounts = DeliveryPersonBankAccount::query()
+            ->where('delivery_person_id', $person->id)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderByDesc('id')
+            ->get()
+            ->map->toSafeArray()
+            ->values();
 
         return view('delivery-person-portal.profile', [
             'person' => $person,
+            'bankAccounts' => $bankAccounts,
+            'countriesMeta' => $this->bankService->getCountriesMeta(),
+            'currencies' => \App\Support\CurrencyCatalog::CURRENCIES,
         ]);
     }
 

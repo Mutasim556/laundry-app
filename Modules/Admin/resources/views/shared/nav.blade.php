@@ -121,16 +121,17 @@
         @endif
 
         @if (auth('admin')->user()->can('view-stores', 'admin') ||
-                auth('admin')->user()->can('manage-vendors', 'admin'))
-            <li class="sidebar-item {{ request()->routeIs('admin.stores.*') ? 'selected' : '' }}">
-                <a class="sidebar-link has-arrow waves-effect waves-dark {{ request()->routeIs('admin.stores.*') ? 'active' : '' }}"
+                auth('admin')->user()->can('manage-vendors', 'admin') ||
+                auth('admin')->user()->can('view-store-accounts', 'admin'))
+            <li class="sidebar-item {{ request()->routeIs('admin.stores.*') || request()->routeIs('admin.store-withdrawals.*') ? 'selected' : '' }}">
+                <a class="sidebar-link has-arrow waves-effect waves-dark {{ request()->routeIs('admin.stores.*') || request()->routeIs('admin.store-withdrawals.*') ? 'active' : '' }}"
                     href="javascript:void(0)"
-                    aria-expanded="{{ request()->routeIs('admin.stores.*') ? 'true' : 'false' }}">
+                    aria-expanded="{{ request()->routeIs('admin.stores.*') || request()->routeIs('admin.store-withdrawals.*') ? 'true' : 'false' }}">
                     <i data-feather="shopping-cart" class="sidebar-icon" aria-hidden="true"></i>
                     <span class="hide-menu">Store Management</span>
                 </a>
-                <ul aria-expanded="{{ request()->routeIs('admin.stores.*') ? 'true' : 'false' }}"
-                    class="collapse first-level {{ request()->routeIs('admin.stores.*') ? 'in' : '' }}">
+                <ul aria-expanded="{{ request()->routeIs('admin.stores.*') || request()->routeIs('admin.store-withdrawals.*') ? 'true' : 'false' }}"
+                    class="collapse first-level {{ request()->routeIs('admin.stores.*') || request()->routeIs('admin.store-withdrawals.*') ? 'in' : '' }}">
                     @can('view-stores', 'admin')
                         <li class="sidebar-item {{ request()->routeIs('admin.stores.index') || request()->routeIs('admin.stores.update') ? 'active' : '' }}">
                             <a href="{{ route('admin.stores.index') }}"
@@ -150,6 +151,15 @@
                             </a>
                         </li>
                     @endcan
+                    @if (auth('admin')->user()->can('view-store-accounts', 'admin') || auth('admin')->user()->can('view-stores', 'admin'))
+                        <li class="sidebar-item {{ request()->routeIs('admin.store-withdrawals.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.store-withdrawals.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.store-withdrawals.*') ? 'active' : '' }}">
+                                <i data-feather="dollar-sign" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">Store Withdrawals</span>
+                            </a>
+                        </li>
+                    @endif
                 </ul>
             </li>
         @endif
@@ -161,7 +171,8 @@
                 $dpRouteActive = request()->routeIs('admin.delivery-persons.*')
                     || request()->routeIs('admin.delivery-assignments.*')
                     || request()->routeIs('admin.delivery-activity.*')
-                    || request()->routeIs('admin.delivery-payouts.*');
+                    || request()->routeIs('admin.delivery-payouts.*')
+                    || request()->routeIs('admin.delivery-person-withdrawals.*');
             @endphp
             <li class="sidebar-item {{ $dpRouteActive ? 'selected' : '' }}">
                 <a class="sidebar-link has-arrow waves-effect waves-dark {{ $dpRouteActive ? 'active' : '' }}"
@@ -209,6 +220,13 @@
                             class="sidebar-link {{ request()->routeIs('admin.delivery-payouts.*') ? 'active' : '' }}">
                             <i data-feather="credit-card" class="sidebar-icon" aria-hidden="true"></i>
                             <span class="hide-menu">Account Balances &amp; Payouts</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item {{ request()->routeIs('admin.delivery-person-withdrawals.*') ? 'active' : '' }}">
+                        <a href="{{ route('admin.delivery-person-withdrawals.index') }}"
+                            class="sidebar-link {{ request()->routeIs('admin.delivery-person-withdrawals.*') ? 'active' : '' }}">
+                            <i data-feather="dollar-sign" class="sidebar-icon" aria-hidden="true"></i>
+                            <span class="hide-menu">Withdrawal Requests</span>
                         </a>
                     </li>
                 </ul>
@@ -272,6 +290,51 @@
                     <i data-feather="check-square" class="sidebar-icon" aria-hidden="true"></i>
                     <span class="hide-menu">Booking Management</span>
                 </a>
+            </li>
+            @php $rrActive = request()->routeIs('admin.refund-returns.*'); @endphp
+            <li class="sidebar-item {{ $rrActive ? 'selected' : '' }}">
+                <a class="sidebar-link has-arrow waves-effect waves-dark {{ $rrActive ? 'active' : '' }}"
+                    href="javascript:void(0)" aria-expanded="{{ $rrActive ? 'true' : 'false' }}">
+                    <i data-feather="rotate-ccw" class="sidebar-icon" aria-hidden="true"></i>
+                    <span class="hide-menu">Refund &amp; Returns</span>
+                </a>
+                <ul aria-expanded="{{ $rrActive ? 'true' : 'false' }}" class="collapse first-level {{ $rrActive ? 'in' : '' }}">
+                    <li class="sidebar-item">
+                        <a href="{{ route('admin.refund-returns.cases.index') }}" class="sidebar-link {{ request()->routeIs('admin.refund-returns.cases.index') && !request('type') ? 'active' : '' }}">
+                            <span class="hide-menu">All Requests</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{{ route('admin.refund-returns.cases.index', ['type' => 'cancellation_refund']) }}" class="sidebar-link {{ request('type') === 'cancellation_refund' ? 'active' : '' }}">
+                            <span class="hide-menu">Refund Requests</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{{ route('admin.refund-returns.cases.index', ['type' => 'rewash']) }}" class="sidebar-link {{ request('type') === 'rewash' ? 'active' : '' }}">
+                            <span class="hide-menu">Rewash Requests</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{{ route('admin.refund-returns.cases.index', ['type' => 'damage_missing']) }}" class="sidebar-link {{ request('type') === 'damage_missing' ? 'active' : '' }}">
+                            <span class="hide-menu">Damage &amp; Missing Claims</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{{ route('admin.refund-returns.policies.index') }}" class="sidebar-link {{ request()->routeIs('admin.refund-returns.policies.index') ? 'active' : '' }}">
+                            <span class="hide-menu">Policy Settings</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{{ route('admin.refund-returns.policies.history') }}" class="sidebar-link {{ request()->routeIs('admin.refund-returns.policies.history') ? 'active' : '' }}">
+                            <span class="hide-menu">Policy History</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{{ route('admin.refund-returns.refunds.index') }}" class="sidebar-link {{ request()->routeIs('admin.refund-returns.refunds.*') ? 'active' : '' }}">
+                            <span class="hide-menu">Refund Transactions</span>
+                        </a>
+                    </li>
+                </ul>
             </li>
         @endcan
 

@@ -249,6 +249,7 @@ class Booking extends Model
         'stripe_refund_id',
         'refund_status',
         'refunded_amount_minor',
+        'policy_version_id',
         'consent_accepted',
         'consent_timestamp',
         'consent_text',
@@ -376,6 +377,38 @@ class Booking extends Model
     public function currentStoreHandover(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(BookingStoreHandover::class)->latest('id');
+    }
+
+    public function storePickupRequests(): HasMany
+    {
+        return $this->hasMany(BookingStorePickupRequest::class)->orderByDesc('id');
+    }
+
+    public function currentStorePickupRequest(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BookingStorePickupRequest::class)
+            ->whereNotIn('status', [BookingStorePickupRequest::STATUS_CANCELLED])
+            ->latest('id');
+    }
+
+    public function latestStorePickupRequest(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BookingStorePickupRequest::class)->latest('id');
+    }
+
+    public function policyVersion(): BelongsTo
+    {
+        return $this->belongsTo(RefundReturnPolicyVersion::class, 'policy_version_id');
+    }
+
+    public function claims(): HasMany
+    {
+        return $this->hasMany(CustomerServiceClaim::class, 'booking_id')->orderByDesc('id');
+    }
+
+    public function refundTransactions(): HasMany
+    {
+        return $this->hasMany(RefundTransaction::class, 'booking_id')->orderByDesc('id');
     }
 
     public function currentStoreAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
@@ -639,7 +672,8 @@ class Booking extends Model
     {
         return match (strtolower((string) $this->payment_status)) {
             'paid' => 'Paid',
-            'authorized' => 'Authorized',
+            'partially_paid' => 'Partially Paid',
+            'authorized', 'authorized_for_later_charge' => 'Authorized',
             'failed' => 'Failed',
             'refunded' => 'Refunded',
             'partial_refund' => 'Partially Refunded',

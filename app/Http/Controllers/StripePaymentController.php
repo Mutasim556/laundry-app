@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Booking;
+use App\Models\BookingCustomerPayment;
 use App\Models\CustomerPaymentMethod;
 use App\Models\StripeWebhookEvent;
+use App\Services\CollectionPaymentService;
 use App\Services\StripePaymentService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Stripe\Exception\SignatureVerificationException;
@@ -14,7 +17,8 @@ use Stripe\Exception\SignatureVerificationException;
 class StripePaymentController extends Controller
 {
     public function __construct(
-        protected StripePaymentService $stripe
+        protected StripePaymentService $stripe,
+        protected CollectionPaymentService $collectionPaymentService
     ) {}
 
     /**
@@ -128,6 +132,86 @@ class StripePaymentController extends Controller
     }
 
     /**
+     * Customer return URL from Stripe Checkout Session (signed URL).
+     * Verifies payment directly with Stripe API before recording.
+     */
+    public function checkoutReturn(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        if (! $request->hasValidSignatureWhileIgnoring(['session_id'])) {
+            abort(403, 'Invalid or expired Stripe return signature.');
+        }
+
+        $sessionId = trim((string) $request->query('session_id', ''));
+        if ($sessionId === '') {
+            return redirect()->route('booking.success', $booking->reference)
+                ->with('error', 'Missing Stripe checkout session reference.');
+        }
+
+        try {
+            $session = $this->stripe->retrieveCheckoutSession($sessionId);
+            $metaBookingId = (string) ($session->metadata->booking_id ?? $session->client_reference_id ?? '');
+            if ($metaBookingId !== '' && $metaBookingId !== (string) $booking->id) {
+                return redirect()->route('booking.success', $booking->reference)
+                    ->with('error', 'Stripe session does not match this booking.');
+            }
+
+            $paymentStatus = strtolower((string) ($session->payment_status ?? ''));
+            if ($paymentStatus === 'paid') {
+                $amountMinor = (int) ($session->amount_total ?? 0);
+                $currency = strtoupper((string) ($session->currency ?? $booking->currency ?? 'GBP'));
+                $piId = is_object($session->payment_intent ?? null)
+                    ? (string) ($session->payment_intent->id ?? '')
+                    : (string) ($session->payment_intent ?? '');
+
+                if ($piId !== '' && $booking->stripe_payment_intent_id !== $piId) {
+                    $booking->forceFill(['stripe_payment_intent_id' => $piId])->save();
+                }
+
+                $this->collectionPaymentService->recordVerifiedGatewayPayment(
+                    $booking,
+                    BookingCustomerPayment::METHOD_STRIPE,
+                    $sessionId,
+                    $amountMinor,
+                    $currency,
+                    'Verified via Stripe Checkout return'
+                );
+
+                if ($request->expectsJson()) {
+                    return response()->json(['status' => 'paid', 'session_id' => $sessionId]);
+                }
+
+                return redirect()->route('orders.show', $booking->reference)
+                    ->with('success', 'Stripe payment confirmed successfully.');
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json(['status' => 'pending', 'session_id' => $sessionId]);
+            }
+
+            return redirect()->route('orders.show', $booking->reference)
+                ->with('info', 'Stripe payment is still processing. Your order will update once confirmed.');
+        } catch (\Throwable $e) {
+            Log::error('Stripe checkout return verification failed', [
+                'booking_id' => $booking->id,
+                'session_id' => $sessionId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('orders.show', $booking->reference)
+                ->with('error', 'Unable to verify Stripe payment right now. Please contact support if charged.');
+        }
+    }
+
+    /**
+     * Customer cancel URL from Stripe Checkout Session (signed URL).
+     */
+    public function checkoutCancel(Request $request, Booking $booking): RedirectResponse
+    {
+        return redirect()->route('orders.show', $booking->reference)
+            ->with('error', 'Stripe payment was cancelled. No charge was made.');
+    }
+
+    /**
      * Verified, idempotent Stripe Webhook handler.
      * POST /stripe/webhook (CSRF exempt)
      */
@@ -173,22 +257,93 @@ class StripePaymentController extends Controller
                     }
                     break;
 
+                case 'checkout.session.completed':
+                case 'checkout.session.async_payment_succeeded':
+                    if ($object && ! empty($object->id)) {
+                        $sessionStatus = strtolower((string) ($object->payment_status ?? ''));
+                        if ($sessionStatus !== 'paid') {
+                            break;
+                        }
+                        $bookingId = (int) ($object->metadata->booking_id ?? $object->client_reference_id ?? 0);
+                        $booking = $bookingId > 0 ? Booking::find($bookingId) : null;
+                        if ($booking) {
+                            $amountMinor = (int) ($object->amount_total ?? 0);
+                            $currency = strtoupper((string) ($object->currency ?? $booking->currency ?? 'GBP'));
+                            if ($amountMinor > 0) {
+                                $this->collectionPaymentService->recordVerifiedGatewayPayment(
+                                    $booking,
+                                    BookingCustomerPayment::METHOD_STRIPE,
+                                    (string) $object->id,
+                                    $amountMinor,
+                                    $currency,
+                                    'Verified via Stripe webhook (' . $eventType . ')',
+                                    $event->id
+                                );
+                            }
+                        }
+                    }
+                    break;
+
+                case 'checkout.session.async_payment_failed':
+                case 'checkout.session.expired':
+                    if ($object && ! empty($object->id)) {
+                        $bookingId = (int) ($object->metadata->booking_id ?? $object->client_reference_id ?? 0);
+                        $booking = $bookingId > 0 ? Booking::find($bookingId) : null;
+                        if ($booking) {
+                            $this->collectionPaymentService->markGatewayPaymentFailed(
+                                $booking,
+                                BookingCustomerPayment::METHOD_STRIPE,
+                                (string) $object->id,
+                                $eventType === 'checkout.session.expired'
+                                    ? 'Stripe Checkout session expired.'
+                                    : 'Stripe payment failed.'
+                            );
+                        }
+                    }
+                    break;
+
                 case 'payment_intent.succeeded':
                     if ($object && ! empty($object->id)) {
-                        Booking::where('stripe_payment_intent_id', $object->id)->update([
-                            'payment_status' => 'paid',
-                            'paid_at' => now(),
-                            'last_payment_error' => null,
-                        ]);
+                        $booking = Booking::where('stripe_payment_intent_id', $object->id)->first();
+                        if (! $booking && ! empty($object->metadata->booking_id)) {
+                            $booking = Booking::find((int) $object->metadata->booking_id);
+                        }
+                        if ($booking) {
+                            $amountMinor = (int) ($object->amount_received ?? $object->amount ?? 0);
+                            $currency = strtoupper((string) ($object->currency ?? $booking->currency ?? 'GBP'));
+                            if ($amountMinor > 0) {
+                                $this->collectionPaymentService->recordVerifiedGatewayPayment(
+                                    $booking,
+                                    BookingCustomerPayment::METHOD_STRIPE,
+                                    (string) $object->id,
+                                    $amountMinor,
+                                    $currency,
+                                    'Verified via Stripe payment_intent.succeeded',
+                                    $event->id
+                                );
+                            } else {
+                                $booking->update([
+                                    'payment_status' => 'paid',
+                                    'paid_at' => $booking->paid_at ?? now(),
+                                    'last_payment_error' => null,
+                                ]);
+                            }
+                        }
                     }
                     break;
 
                 case 'payment_intent.payment_failed':
                     if ($object && ! empty($object->id)) {
-                        Booking::where('stripe_payment_intent_id', $object->id)->update([
-                            'payment_status' => 'failed',
-                            'last_payment_error' => $object->last_payment_error->message ?? 'Payment failed.',
-                        ]);
+                        $reason = $object->last_payment_error->message ?? 'Payment failed.';
+                        $booking = Booking::where('stripe_payment_intent_id', $object->id)->first();
+                        if ($booking) {
+                            $this->collectionPaymentService->markGatewayPaymentFailed(
+                                $booking,
+                                BookingCustomerPayment::METHOD_STRIPE,
+                                (string) $object->id,
+                                $reason
+                            );
+                        }
                     }
                     break;
 
@@ -201,11 +356,25 @@ class StripePaymentController extends Controller
                     }
                     break;
 
-                case 'payment_intent.canceled':
+                case 'payment_intent.processing':
                     if ($object && ! empty($object->id)) {
                         Booking::where('stripe_payment_intent_id', $object->id)->update([
-                            'payment_status' => 'canceled',
+                            'last_payment_error' => null,
                         ]);
+                    }
+                    break;
+
+                case 'payment_intent.canceled':
+                    if ($object && ! empty($object->id)) {
+                        $booking = Booking::where('stripe_payment_intent_id', $object->id)->first();
+                        if ($booking) {
+                            $this->collectionPaymentService->markGatewayPaymentFailed(
+                                $booking,
+                                BookingCustomerPayment::METHOD_STRIPE,
+                                (string) $object->id,
+                                'Stripe payment was canceled.'
+                            );
+                        }
                     }
                     break;
 
