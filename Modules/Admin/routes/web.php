@@ -529,6 +529,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 ->middleware('permission:manage-database-backup-schedules,admin')
                 ->name('schedule.update');
         });
+
+        // Database Cleanup (Module-Wise Safe Development Data Reset)
+        Route::prefix('database-cleanup')->name('database-cleanup.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DatabaseCleanupController::class, 'index'])
+                ->middleware('permission:manage-database-cleanup,admin')
+                ->name('index');
+            Route::post('/preview', [\Modules\Admin\App\Http\Controllers\DatabaseCleanupController::class, 'preview'])
+                ->middleware('permission:manage-database-cleanup,admin')
+                ->name('preview');
+            Route::post('/execute', [\Modules\Admin\App\Http\Controllers\DatabaseCleanupController::class, 'execute'])
+                ->middleware(['permission:manage-database-cleanup,admin', 'throttle:5,1'])
+                ->name('execute');
+        });
     });
 });
 

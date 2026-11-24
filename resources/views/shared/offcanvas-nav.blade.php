@@ -7,15 +7,6 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body">
-        <div class="p-3 mb-3 rounded-4" style="background-color: var(--soft-cream); border: 1px solid rgba(255, 198, 41, 0.4);">
-            <div class="d-flex align-items-center justify-content-between mb-1">
-                <span class="badge bg-warning text-dark fw-bold">20% Discount</span>
-                <span class="small text-muted">Just now</span>
-            </div>
-            <h6 class="fw-bold mb-1 text-dark">Welcome{{ auth('web')->check() ? ', ' . auth('web')->user()->name : '' }}!</h6>
-            <p class="small text-secondary m-0">Use promo code <strong>FRESH20</strong> to receive 20% off your first laundry or dry cleaning collection.</p>
-        </div>
-
         <div class="p-3 mb-2 rounded-4 bg-light border">
             <div class="d-flex align-items-center justify-content-between mb-1">
                 <span class="badge bg-success">Status Update</span>
@@ -57,57 +48,69 @@
 
         <ul class="list-unstyled d-flex flex-column gap-2">
             <li>
-                <a href="{{ url('/') }}" class="d-flex align-items-center justify-content-between p-3 rounded-4 text-decoration-none text-dark bg-light fw-semibold">
+                <a href="{{ url('/') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->is('/') ? 'text-white' : 'text-dark bg-light' }}"
+                   @if(request()->is('/')) style="background-color: #171717;" @endif>
                     <span>Home</span><span>&rarr;</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('services.index') }}" class="d-flex align-items-center justify-content-between p-3 rounded-4 text-decoration-none text-dark bg-light fw-semibold">
-                    <span>All Services &amp; Prices</span><span>&rarr;</span>
+                <a href="{{ route('services.index') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->routeIs('services.*') ? 'text-white' : 'text-dark bg-light' }}"
+                   @if(request()->routeIs('services.*')) style="background-color: #171717;" @endif>
+                    <span>Services</span><span>&rarr;</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('orders.index') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->routeIs('orders.*') ? 'text-white' : 'text-dark bg-light' }}"
+                   @if(request()->routeIs('orders.*')) style="background-color: #171717;" @endif>
+                    <span>Orders</span><span>&rarr;</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url('/#about') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none text-dark bg-light fw-semibold">
+                    <span>About</span><span>&rarr;</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ url('/#contact') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none text-dark bg-light fw-semibold">
+                    <span>Contact</span><span>&rarr;</span>
                 </a>
             </li>
             @auth('web')
-                <li>
-                    <a href="{{ route('account.profile') }}" class="d-flex align-items-center justify-content-between p-3 rounded-4 text-decoration-none text-dark bg-light fw-semibold">
+                <li class="pt-2 border-top mt-1">
+                    <a href="{{ route('account.profile') }}"
+                       class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->routeIs('account.profile') ? 'text-white' : 'text-dark bg-light' }}"
+                       @if(request()->routeIs('account.profile')) style="background-color: #171717;" @endif>
                         <span>My Profile</span><span>&rarr;</span>
                     </a>
                 </li>
                 <li>
-                    <a href="{{ route('orders.index') }}" class="d-flex align-items-center justify-content-between p-3 rounded-4 text-decoration-none text-dark bg-light fw-semibold">
-                        <span>My Orders</span><span>&rarr;</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('account.addresses') }}" class="d-flex align-items-center justify-content-between p-3 rounded-4 text-decoration-none text-dark bg-light fw-semibold">
+                    <a href="{{ route('account.addresses') }}"
+                       class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->routeIs('account.addresses*') ? 'text-white' : 'text-dark bg-light' }}"
+                       @if(request()->routeIs('account.addresses*')) style="background-color: #171717;" @endif>
                         <span>Address Book</span><span>&rarr;</span>
                     </a>
                 </li>
-                <li>
-                    <a href="{{ route('account.payment-methods') }}" class="d-flex align-items-center justify-content-between p-3 rounded-4 text-decoration-none text-dark bg-light fw-semibold">
+                {{-- <li>
+                    <a href="{{ route('account.payment-methods') }}"
+                       class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->routeIs('account.payment-methods*') ? 'text-white' : 'text-dark bg-light' }}"
+                       @if(request()->routeIs('account.payment-methods*')) style="background-color: #171717;" @endif>
                         <span>Saved Payment Methods</span><span>&rarr;</span>
                     </a>
-                </li>
+                </li> --}}
                 <li>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
-                        <button type="submit" class="w-100 d-flex align-items-center justify-content-between p-3 rounded-4 border-0 text-danger bg-light fw-semibold">
+                        <button type="submit" class="w-100 d-flex align-items-center justify-content-between p-3 rounded-3 border-0 text-danger bg-light fw-semibold">
                             <span>Logout</span><span>&rarr;</span>
                         </button>
                     </form>
                 </li>
-            @else
-                <li>
-                    <a href="{{ route('orders.index') }}" class="d-flex align-items-center justify-content-between p-3 rounded-4 text-decoration-none text-dark bg-light fw-semibold">
-                        <span>Track / Lookup Order</span><span>&rarr;</span>
-                    </a>
-                </li>
             @endauth
         </ul>
-
-        <div class="mt-4 pt-4 border-top text-center">
-            <a href="{{ route('booking.services', ['new' => 1]) }}" class="btn btn-warning w-100 rounded-pill py-3 fw-bold text-dark shadow-sm">
-                Book Service Now
-            </a>
-        </div>
     </div>
 </div>

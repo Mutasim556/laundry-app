@@ -120,15 +120,7 @@
     </style>
 </head>
 <body class="booking-page-body">
-    <!-- Mobile Header (< 992px) -->
-    <div class="d-lg-none px-3 pt-3 bg-white border-bottom">
-        @include('shared.header-mobile')
-    </div>
-
-    <!-- Desktop Navbar (>= 992px) -->
-    <div class="d-none d-lg-block">
-        @include('shared.header-desktop')
-    </div>
+    @include('shared.header')
 
     @php
         $currency = $pricing['currency'] ?? 'BDT';

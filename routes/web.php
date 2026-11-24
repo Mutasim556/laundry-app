@@ -4,6 +4,7 @@ use App\Http\Controllers\BookingAddressController;
 use App\Http\Controllers\CustomerAccountController;
 use App\Http\Controllers\CustomerAuthController;
 use App\Http\Controllers\CustomerBookingController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PayPalPaymentController;
 use App\Http\Controllers\StripePaymentController;
 use Illuminate\Http\Request;
@@ -13,12 +14,10 @@ use Modules\Admin\Models\Item;
 use Modules\Admin\Models\ItemCategory;
 use Modules\Admin\Models\Service;
 
-Route::get('/', function () {
-    $categories = ItemCategory::query()->where('is_active', true)->orderBy('id')->get();
-    $popularServices = Service::query()->with(['unit', 'category'])->where('is_active', true)->take(8)->get();
-
-    return view('welcome', compact('categories', 'popularServices'));
-});
+Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/api/home/search', [HomeController::class, 'search'])
+    ->middleware('throttle:60,1')
+    ->name('home.search');
 
 Route::get('/services', function (Request $request) {
     $filters = $request->validate([

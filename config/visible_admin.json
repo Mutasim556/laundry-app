@@ -1,0 +1,135 @@
+{
+  "Dashboard": {
+    "visibility": true
+  },
+  "Roles & Permissions": {
+    "visibility": true,
+    "children": {
+      "Roles": {
+        "visibility": true
+      },
+      "Admins": {
+        "visibility": true
+      },
+      "Users": {
+        "visibility": true
+      }
+    }
+  },
+  "Branding & Logo": {
+    "visibility": true
+  },
+  "Services": {
+    "visibility": true,
+    "children": {
+      "Unit": {
+        "visibility": true
+      },
+      "Item Category": {
+        "visibility": true
+      },
+      "Items": {
+        "visibility": true
+      },
+      "Services": {
+        "visibility": true
+      }
+    }
+  },
+  "Store Management": {
+    "visibility": true,
+    "children": {
+      "Stores": {
+        "visibility": true
+      },
+      "Vendors": {
+        "visibility": true
+      },
+      "Store Withdrawals": {
+        "visibility": true
+      }
+    }
+  },
+  "Delivery Persons": {
+    "visibility": true,
+    "children": {
+      "All Delivery Persons": {
+        "visibility": true
+      },
+      "Add Delivery Person": {
+        "visibility": true
+      },
+      "Delivery Assignments": {
+        "visibility": true
+      },
+      "Activity History": {
+        "visibility": true
+      },
+      "Account Balances & Payouts": {
+        "visibility": true
+      },
+      "Withdrawal Requests": {
+        "visibility": true
+      }
+    }
+  },
+  "UK Address Management": {
+    "visibility": true
+  },
+  "Hotel Management": {
+    "visibility": true
+  },
+  "Booking Schedule": {
+    "visibility": true
+  },
+  "Payment Gateways": {
+    "visibility": true
+  },
+  "Booking Fee Settings": {
+    "visibility": true
+  },
+  "Booking Management": {
+    "visibility": true
+  },
+  "Refund & Returns": {
+    "visibility": true,
+    "children": {
+      "All Requests": {
+        "visibility": true
+      },
+      "Refund Requests": {
+        "visibility": true
+      },
+      "Rewash Requests": {
+        "visibility": true
+      },
+      "Damage & Missing Claims": {
+        "visibility": true
+      },
+      "Policy Settings": {
+        "visibility": true
+      },
+      "Policy History": {
+        "visibility": true
+      },
+      "Refund Transactions": {
+        "visibility": true
+      }
+    }
+  },
+  "Current Account": {
+    "visibility": true
+  },
+  "Delivery Settlements": {
+    "visibility": true
+  },
+  "Country & Currency": {
+    "visibility": true
+  },
+  "Database Backup & Restore": {
+    "visibility": true
+  },
+  "Database Cleanup": {
+    "visibility": true
+  }
+}

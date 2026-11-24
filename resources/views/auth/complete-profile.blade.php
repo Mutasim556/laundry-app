@@ -14,12 +14,8 @@
     <link rel="stylesheet" href="{{ asset('css/booking-address.css') }}">
 </head>
 <body class="booking-page-body">
-    <div class="d-lg-none px-3 pt-3 bg-white border-bottom">
-        @include('shared.header-mobile')
-    </div>
-    <div class="d-none d-lg-block">
-        @include('shared.header-desktop')
-    </div>
+    
+    @include('shared.header')
 
     <main class="container py-5">
         <div class="row justify-content-center">
@@ -93,6 +89,7 @@
         </div>
     </main>
 
+    @include('shared.footer')
     @include('shared.bottom-nav')
     @include('shared.offcanvas-nav')
     <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>

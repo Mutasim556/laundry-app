@@ -14,14 +14,10 @@
     <link rel="stylesheet" href="{{ asset('css/booking-address.css') }}">
 </head>
 <body class="booking-page-body">
-    <div class="d-lg-none px-3 pt-3 bg-white border-bottom">
-        @include('shared.header-mobile')
-    </div>
-    <div class="d-none d-lg-block">
-        @include('shared.header-desktop')
-    </div>
+    
+    @include('shared.header')
 
-    <main class="container py-4 py-md-5">
+    <main class="container pt-4 pt-md-5" style="padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px));">
         <div class="row justify-content-center">
             <div class="col-12 col-md-9 col-lg-7">
                 <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 bg-white">
@@ -88,6 +84,7 @@
         </div>
     </main>
 
+    @include('shared.footer')
     @include('shared.bottom-nav')
     @include('shared.offcanvas-nav')
     <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
