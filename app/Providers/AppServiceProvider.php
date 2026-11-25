@@ -6,7 +6,9 @@ use App\Models\Booking;
 use App\Models\CustomerAddress;
 use App\Policies\BookingPolicy;
 use App\Policies\CustomerAddressPolicy;
+use App\Services\AdminSidebarVisibilityService;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -30,6 +32,11 @@ class AppServiceProvider extends ServiceProvider
         // Grant super-admin role all permissions implicitly using Gate::before
         Gate::before(function ($user, string $ability) {
             return method_exists($user, 'hasRole') && $user->hasRole('super-admin', 'admin') ? true : null;
+        });
+
+        View::composer('admin::shared.nav', function ($view): void {
+            $service = new AdminSidebarVisibilityService();
+            $view->with('adminMenuVisible', $service->makeVisibilityChecker());
         });
     }
 }

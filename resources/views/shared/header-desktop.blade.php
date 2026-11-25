@@ -11,7 +11,7 @@
                 <li class="nav-item"><a href="{{ url('/') }}" class="desktop-nav-link {{ request()->is('/') ? 'active' : '' }}">Home</a></li>
                 <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link {{ request()->routeIs('services.*') ? 'active' : '' }}">Services</a></li>
                 <li class="nav-item"><a href="{{ route('orders.index') }}" class="desktop-nav-link {{ request()->routeIs('orders.*') ? 'active' : '' }}">Orders</a></li>
-                <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link">Offers</a></li>
+                {{-- <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link">Offers</a></li> --}}
                 <li class="nav-item"><a href="{{ url('/#about') }}" class="desktop-nav-link">About</a></li>
                 <li class="nav-item"><a href="{{ url('/#contact') }}" class="desktop-nav-link">Contact</a></li>
             </ul>
@@ -61,12 +61,12 @@
                                     <span>📍</span><span>Address Book</span>
                                 </a>
                             </li>
-                            <li>
+                            {{-- <li>
                                 <a class="dropdown-item rounded-3 py-2 d-flex align-items-center gap-2 {{ request()->routeIs('account.payment-methods*') ? 'active' : '' }}"
                                    href="{{ route('account.payment-methods') }}">
                                     <span>💳</span><span>Saved Payment Methods</span>
                                 </a>
-                            </li>
+                            </li> --}}
                             <li><hr class="dropdown-divider my-2"></li>
                             <li>
                                 <form method="POST" action="{{ route('logout') }}">

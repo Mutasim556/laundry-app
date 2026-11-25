@@ -5,7 +5,7 @@
     $opItems = $booking->operationalItems->where('is_removed', false);
 @endphp
 
-<div class="container my-4" style="max-width: 980px;">
+<div class="mt-3" id="orderNeedHelpSection">
     <div class="card border-0 shadow-sm" style="border-radius: 16px; border: 1px solid #FDE68A !important; background: linear-gradient(135deg, #FFFFFF 0%, #FFF8E5 100%);">
         <div class="card-body p-3 p-md-4">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">

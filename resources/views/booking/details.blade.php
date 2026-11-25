@@ -25,15 +25,7 @@
     <link rel="stylesheet" href="{{ asset('css/booking-address.css') }}">
 </head>
 <body class="booking-page-body">
-    <!-- Mobile Header (< 992px) -->
-    <div class="d-lg-none px-3 pt-3 bg-white border-bottom">
-        @include('shared.header-mobile')
-    </div>
-
-    <!-- Desktop Navbar (>= 992px) -->
-    <div class="d-none d-lg-block">
-        @include('shared.header-desktop')
-    </div>
+    @include('shared.header')
 
     @php
         $savedDetails = $booking['details'] ?? [];
@@ -319,6 +311,7 @@
         </div>
     </main>
 
+    @include('shared.footer')
     @include('shared.bottom-nav')
     @include('shared.offcanvas-nav')
     <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>

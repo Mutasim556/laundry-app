@@ -27,15 +27,7 @@
     <script src="{{ asset('js/booking-address.js') }}" defer></script>
 </head>
 <body class="booking-page-body">
-    <!-- Mobile Header (< 992px) - Shared with Homepage & Services -->
-    <div class="d-lg-none px-3 pt-3 bg-white border-bottom">
-        @include('shared.header-mobile')
-    </div>
-
-    <!-- Desktop Navbar (>= 992px) - Shared with Homepage & Services -->
-    <div class="d-none d-lg-block">
-        @include('shared.header-desktop')
-    </div>
+    @include('shared.header')
 
     @php
         $savedAddress = $booking['address'] ?? [];
@@ -348,6 +340,7 @@
     </main>
 
     <!-- Mobile Fixed Bottom Navigation Bar (< 992px) -->
+    @include('shared.footer')
     @include('shared.bottom-nav')
 
     <!-- Reusable Offcanvas Modals -->

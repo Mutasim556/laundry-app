@@ -21,21 +21,12 @@
     <link rel="stylesheet" href="{{ asset('css/laundry-home.css') }}">
 
     <!-- Services Redesign Theme CSS -->
-    <link rel="stylesheet" href="{{ asset('css/services.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/services.css') }}?v={{ filemtime(public_path('css/services.css')) }}">
     <script src="{{ asset('js/services.js') }}" defer></script>
 </head>
 <body class="services-page-body">
     <a class="skip-link" href="#catalog">Skip to services</a>
-
-    <!-- Mobile Header (< 992px) - EXACT SAME AS HOMEPAGE -->
-    <div class="d-lg-none px-3 pt-3 bg-white border-bottom">
-        @include('shared.header-mobile')
-    </div>
-
-    <!-- Desktop Navbar (>= 992px) - EXACT SAME AS HOMEPAGE -->
-    <div class="d-none d-lg-block">
-        @include('shared.header-desktop')
-    </div>
+    @include('shared.header')
 
     <!-- Main Catalog: Full-Width Search & Categories Slider + Two-Column Content -->
     <main class="container catalog-section-wrapper" id="catalog">
@@ -172,55 +163,11 @@
     </main>
 
     <!-- Mobile Fixed Bottom Navigation Bar (< 992px) - EXACT SAME AS HOMEPAGE -->
+    @include('shared.footer')
     @include('shared.bottom-nav')
 
     <!-- Reusable Offcanvas Modals (Notifications & Mobile Hamburger Menu) - EXACT SAME AS HOMEPAGE -->
     @include('shared.offcanvas-nav')
-
-    <!-- Desktop Footer matching Homepage -->
-    <footer class="services-footer">
-        <div class="container">
-            <div class="row g-5">
-                <div class="col-lg-4">
-                    <img src="{{ asset('images/freshgo-new-logo.jpeg') }}" alt="Freshgo Logo" class="rounded-2 mb-3" style="height: 48px; background: white; padding: 4px;">
-                    <p class="text-secondary small">
-                        Professional laundry &amp; dry cleaning service crafted for your peace of mind. We collect, clean, and deliver fresh clothes right back to your door.
-                    </p>
-                    <div class="d-flex align-items-center gap-2 pt-2">
-                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold">Freshgo Express</span>
-                        <span class="small text-secondary">Available 7 Days a Week</span>
-                    </div>
-                </div>
-                <div class="col-lg-2 col-md-4">
-                    <h6 class="text-white fw-bold mb-3">Services</h6>
-                    <ul class="list-unstyled">
-                        <li><a href="{{ route('services.index', ['category' => 'wash-fold']) }}" class="footer-link">Wash &amp; Fold</a></li>
-                        <li><a href="{{ route('services.index', ['category' => 'dry-cleaning']) }}" class="footer-link">Dry Cleaning</a></li>
-                        <li><a href="{{ route('services.index', ['category' => 'ironing-only']) }}" class="footer-link">Steam Ironing</a></li>
-                        <li><a href="{{ route('services.index', ['category' => 'bulky-item-duvet']) }}" class="footer-link">Bulky Items &amp; Duvet</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-2 col-md-4">
-                    <h6 class="text-white fw-bold mb-3">Company</h6>
-                    <ul class="list-unstyled">
-                        <li><a href="{{ url('/') }}" class="footer-link">Home</a></li>
-                        <li><a href="{{ url('/#about') }}" class="footer-link">About Us</a></li>
-                        <li><a href="{{ url('/#how-it-works') }}" class="footer-link">How It Works</a></li>
-                        <li><a href="{{ route('admin.login') }}" class="footer-link">Admin Portal</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-4 col-md-4">
-                    <h6 class="text-white fw-bold mb-3">Get in Touch</h6>
-                    <p class="small text-secondary mb-1"><strong>Email:</strong> support@freshgolaundry.co.uk</p>
-                    <p class="small text-secondary mb-1"><strong>Phone:</strong> +44 (0) 20 1234 5678</p>
-                    <p class="small text-secondary"><strong>Hours:</strong> Mon - Sun: 8:00 AM - 9:00 PM</p>
-                </div>
-            </div>
-            <div class="border-top border-secondary pt-4 mt-5 text-center text-secondary small">
-                &copy; {{ date('Y') }} FreshGo Laundry. All rights reserved.
-            </div>
-        </div>
-    </footer>
 
     <!-- Interactive Category Dialog Modal (Preserved Functionality) -->
     <dialog id="category-dialog" class="custom-category-dialog" aria-labelledby="category-dialog-title">
