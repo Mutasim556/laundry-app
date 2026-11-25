@@ -33,6 +33,12 @@
                         <div class="alert alert-success small rounded-3">{{ session('status') }}</div>
                     @endif
 
+                    @if (!empty($isTestingOtpActive))
+                        <div class="alert alert-warning small rounded-3 py-2">
+                            Testing environment — use the configured test OTP.
+                        </div>
+                    @endif
+
                     <form method="POST" action="{{ route('customer.login.send-otp') }}" novalidate>
                         @csrf
                         <div class="mb-3">

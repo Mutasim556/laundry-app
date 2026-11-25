@@ -169,6 +169,9 @@ document.addEventListener('DOMContentLoaded', () => {
             this.prevBtns = sectionEl ? Array.from(sectionEl.querySelectorAll('.js-carousel-prev')) : [];
             this.nextBtns = sectionEl ? Array.from(sectionEl.querySelectorAll('.js-carousel-next')) : [];
             this.intervalMs = parseInt(viewportEl.dataset.interval || '4200', 10);
+            this.autoplayEnabled = viewportEl.dataset.autoplay !== '0';
+            this.pauseOnHover = viewportEl.dataset.pauseHover !== '0';
+            this.loopEnabled = viewportEl.dataset.loop !== '0';
             this.index = 0;
             this.timer = null;
             this.paused = false;
@@ -216,14 +219,22 @@ document.addEventListener('DOMContentLoaded', () => {
         next() {
             const maxIdx = this.getMaxIndex();
             if (maxIdx <= 0) return;
-            this.index = this.index >= maxIdx ? 0 : this.index + 1;
+            if (this.index >= maxIdx) {
+                this.index = this.loopEnabled ? 0 : maxIdx;
+            } else {
+                this.index += 1;
+            }
             this.update();
         }
 
         prev() {
             const maxIdx = this.getMaxIndex();
             if (maxIdx <= 0) return;
-            this.index = this.index <= 0 ? maxIdx : this.index - 1;
+            if (this.index <= 0) {
+                this.index = this.loopEnabled ? maxIdx : 0;
+            } else {
+                this.index -= 1;
+            }
             this.update();
         }
 
@@ -236,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         startAutoplay() {
             this.stopAutoplay();
-            if (this.paused || this.reducedMotion || this.getMaxIndex() <= 0) return;
+            if (!this.autoplayEnabled || this.paused || this.reducedMotion || this.getMaxIndex() <= 0) return;
             this.timer = setInterval(() => this.next(), this.intervalMs);
         }
 
@@ -254,10 +265,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
 
-            this.viewport.addEventListener('mouseenter', () => {
-                this.paused = true;
-                this.stopAutoplay();
-            });
+            if (this.pauseOnHover) {
+                this.viewport.addEventListener('mouseenter', () => {
+                    this.paused = true;
+                    this.stopAutoplay();
+                });
+            }
             this.viewport.addEventListener('mouseleave', () => {
                 this.paused = false;
                 this.startAutoplay();

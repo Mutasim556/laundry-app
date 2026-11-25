@@ -1,3 +1,25 @@
+<style>
+    .custom-offcanvas {
+        z-index: 1060 !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+    }
+    .custom-offcanvas .offcanvas-body {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding-bottom: calc(36px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    .offcanvas-backdrop {
+        z-index: 1055 !important;
+    }
+    body.fg-offcanvas-open .mobile-bottom-nav {
+        display: none !important;
+    }
+</style>
+
 <!-- Notifications Offcanvas -->
 <div class="offcanvas offcanvas-end custom-offcanvas" tabindex="-1" id="notificationOffcanvas" aria-labelledby="notificationOffcanvasLabel">
     <div class="offcanvas-header border-bottom">
@@ -69,15 +91,17 @@
                 </a>
             </li>
             <li>
-                <a href="{{ url('/#about') }}"
-                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none text-dark bg-light fw-semibold">
-                    <span>About</span><span>&rarr;</span>
+                <a href="{{ route('about') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->routeIs('about') ? 'text-white' : 'text-dark bg-light' }}"
+                   @if(request()->routeIs('about')) style="background-color: #171717;" @endif>
+                    <span>About Us</span><span>&rarr;</span>
                 </a>
             </li>
             <li>
-                <a href="{{ url('/#contact') }}"
-                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none text-dark bg-light fw-semibold">
-                    <span>Contact</span><span>&rarr;</span>
+                <a href="{{ route('contact') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-semibold {{ request()->routeIs('contact') ? 'text-white' : 'text-dark bg-light' }}"
+                   @if(request()->routeIs('contact')) style="background-color: #171717;" @endif>
+                    <span>Contact Us</span><span>&rarr;</span>
                 </a>
             </li>
             @auth('web')
@@ -114,3 +138,41 @@
         </ul>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function syncBottomNavState() {
+        var anyOpen = document.querySelector('.custom-offcanvas.show, .custom-offcanvas.showing');
+        document.body.classList.toggle('fg-offcanvas-open', !!anyOpen);
+    }
+
+    document.querySelectorAll('.custom-offcanvas').forEach(function (oc) {
+        oc.addEventListener('show.bs.offcanvas', function () {
+            document.body.classList.add('fg-offcanvas-open');
+        });
+        oc.addEventListener('hidden.bs.offcanvas', syncBottomNavState);
+    });
+
+    if (window.bootstrap && window.bootstrap.Offcanvas) return;
+    document.querySelectorAll('[data-bs-toggle="offcanvas"]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            var targetSel = btn.getAttribute('data-bs-target') || btn.getAttribute('href');
+            var el = targetSel ? document.querySelector(targetSel) : null;
+            if (!el) return;
+            e.preventDefault();
+            el.classList.toggle('show');
+            el.style.visibility = el.classList.contains('show') ? 'visible' : 'hidden';
+            syncBottomNavState();
+        });
+    });
+    document.querySelectorAll('.custom-offcanvas [data-bs-dismiss="offcanvas"]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var el = btn.closest('.custom-offcanvas');
+            if (!el) return;
+            el.classList.remove('show');
+            el.style.visibility = 'hidden';
+            syncBottomNavState();
+        });
+    });
+});
+</script>

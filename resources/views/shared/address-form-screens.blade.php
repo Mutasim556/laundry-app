@@ -421,7 +421,7 @@
             <div id="hotelNameError" class="booking-field-error d-none" role="alert"></div>
         </div>
 
-        <div class="mb-3">
+        {{-- <div class="mb-3">
             <button type="button" id="btnHotelsNearMe" class="booking-inline-action-link">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
@@ -430,7 +430,7 @@
                 <span>Show hotels near me</span>
             </button>
             <div id="hotelGeoStatus" class="small text-muted mt-1 d-none"></div>
-        </div>
+        </div> --}}
 
         <div id="hotelResultsContainer" class="hotel-results-box mb-3 d-none">
             <div class="small fw-bold text-secondary mb-1">Matching Hotels:</div>

@@ -1,7 +1,11 @@
 <div class="results-header-box results-heading">
     <div>
-        <h2 id="results-title" class="results-title-text" tabindex="-1">{{ $category?->name ?? 'Other services' }}</h2>
-        <p class="results-short-desc">{{ $category?->short_description ?: 'Explore the services below and find the care that fits.' }}</p>
+        @php
+            $catOvTitle = trim((string) ($servicesPayload['catalog_config']['title'] ?? ''));
+            $catOvSub = trim((string) ($servicesPayload['catalog_config']['subtitle'] ?? ''));
+        @endphp
+        <h2 id="results-title" class="results-title-text" tabindex="-1">{{ $catOvTitle !== '' ? $catOvTitle : ($category?->name ?? 'Other services') }}</h2>
+        <p class="results-short-desc">{{ $catOvSub !== '' ? $catOvSub : ($category?->short_description ?: 'Explore the services below and find the care that fits.') }}</p>
     </div>
     <span class="results-count-pill result-count">{{ $services->total() }} {{ $services->total() === 1 ? 'service' : 'services' }}</span>
 </div>
@@ -37,18 +41,23 @@
 
 <div class="service-grid service-cards-grid">
     @forelse ($services as $service)
+        @php
+            $svcOv = ($catalogOverrides ?? [])[$service->id] ?? (($catalogOverrides ?? [])[(string) $service->id] ?? []);
+            $svcBadge = ! empty($svcOv['custom_badge']) ? $svcOv['custom_badge'] : ($service->item?->name ?? 'General care');
+            $svcDesc = ! empty($svcOv['custom_description']) ? $svcOv['custom_description'] : $service->description;
+        @endphp
         <article class="service-card service-item-card" style="--card-order: {{ $loop->index }}">
             <div>
                 <div class="card-top card-top-badge">
-                    <span class="service-type service-item-tag">{{ $service->item?->name ?? 'General care' }}</span>
+                    <span class="service-type service-item-tag">{{ $svcBadge }}</span>
                     <span class="card-spark text-warning" aria-hidden="true">✦</span>
                 </div>
                 @if ($service->image_url)
                     <img class="service-image img-fluid rounded-4 mb-3" src="{{ $service->image_url }}" alt="" loading="lazy" style="max-height: 140px; width: 100%; object-fit: cover;">
                 @endif
                 <h3 class="service-card-name">{{ $service->name }}</h3>
-                @if ($service->description)
-                    <p class="service-description service-card-desc">{{ $service->description }}</p>
+                @if ($svcDesc)
+                    <p class="service-description service-card-desc">{{ $svcDesc }}</p>
                 @endif
             </div>
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\CustomerOtpMail;
 use App\Models\CustomerEmailOtp;
 use App\Models\User;
+use App\Services\CustomerLoginOtpSettingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,6 +17,10 @@ use Illuminate\View\View;
 
 class CustomerAuthController extends Controller
 {
+    public function __construct(
+        protected CustomerLoginOtpSettingService $otpSettings
+    ) {}
+
     protected function throttleKey(string $email, string $ip): string
     {
         return 'customer-otp:'.sha1(strtolower($email).'|'.$ip);
@@ -49,10 +54,26 @@ class CustomerAuthController extends Controller
             ->whereNull('consumed_at')
             ->update(['consumed_at' => now()]);
 
+        $effectiveMode = $this->otpSettings->getEffectiveMode();
+        if ($effectiveMode === CustomerLoginOtpSettingService::MODE_TESTING && $this->otpSettings->isEnvironmentAuthorizedForTesting()) {
+            CustomerEmailOtp::create([
+                'email' => $email,
+                'mode' => CustomerLoginOtpSettingService::MODE_TESTING,
+                'otp_hash' => Hash::make($this->otpSettings->getTestOtpCode()),
+                'expires_at' => now()->addMinutes(CustomerEmailOtp::EXPIRY_MINUTES),
+                'attempts' => 0,
+                'resend_available_at' => now()->addSeconds(CustomerEmailOtp::RESEND_COOLDOWN_SECONDS),
+                'ip_address' => $request->ip(),
+            ]);
+
+            return null;
+        }
+
         $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
         $record = CustomerEmailOtp::create([
             'email' => $email,
+            'mode' => CustomerLoginOtpSettingService::MODE_EMAIL,
             'otp_hash' => Hash::make($otp),
             'expires_at' => now()->addMinutes(CustomerEmailOtp::EXPIRY_MINUTES),
             'attempts' => 0,
@@ -77,7 +98,9 @@ class CustomerAuthController extends Controller
             return redirect('/');
         }
 
-        return view('auth.login');
+        return view('auth.login', [
+            'isTestingOtpActive' => $this->otpSettings->isTestingModeActive(),
+        ]);
     }
 
     public function sendOtp(Request $request): RedirectResponse
@@ -93,8 +116,12 @@ class CustomerAuthController extends Controller
 
         $request->session()->put('otp_pending_email', $email);
 
+        $statusMessage = $this->otpSettings->isTestingModeActive()
+            ? 'Testing mode is active. Enter the configured test verification code.'
+            : 'A 6-digit verification code has been sent to your email address.';
+
         return redirect()->route('customer.otp.show')
-            ->with('status', 'A 6-digit verification code has been sent to your email address.');
+            ->with('status', $statusMessage);
     }
 
     public function showOtpForm(Request $request): View|RedirectResponse
@@ -117,6 +144,7 @@ class CustomerAuthController extends Controller
         return view('auth.verify-otp', [
             'email' => $email,
             'cooldownSeconds' => $cooldownSeconds,
+            'isTestingOtpActive' => $this->otpSettings->isTestingModeActive(),
         ]);
     }
 
@@ -131,8 +159,12 @@ class CustomerAuthController extends Controller
             return back()->withErrors(['otp' => $error]);
         }
 
+        $statusMessage = $this->otpSettings->isTestingModeActive()
+            ? 'Testing mode is active. Enter the configured test verification code.'
+            : 'A new 6-digit verification code has been sent to your email.';
+
         return redirect()->route('customer.otp.show')
-            ->with('status', 'A new 6-digit verification code has been sent to your email.');
+            ->with('status', $statusMessage);
     }
 
     public function verifyOtp(Request $request): RedirectResponse
@@ -161,6 +193,14 @@ class CustomerAuthController extends Controller
             return back()->withErrors(['otp' => 'No active verification code found. Please request a new code.']);
         }
 
+        $effectiveMode = $this->otpSettings->getEffectiveMode();
+        $recordMode = $record->mode ?: CustomerLoginOtpSettingService::MODE_EMAIL;
+        if ($recordMode !== $effectiveMode) {
+            $record->update(['consumed_at' => now()]);
+
+            return back()->withErrors(['otp' => 'Verification mode has changed. Please request a new verification code.']);
+        }
+
         if ($record->isExpired()) {
             $record->update(['consumed_at' => now()]);
 
@@ -175,7 +215,11 @@ class CustomerAuthController extends Controller
 
         $record->increment('attempts');
 
-        if (! Hash::check($rawOtp, $record->otp_hash)) {
+        $isValidOtp = $effectiveMode === CustomerLoginOtpSettingService::MODE_TESTING
+            ? ($this->otpSettings->isEnvironmentAuthorizedForTesting() && hash_equals($this->otpSettings->getTestOtpCode(), $rawOtp))
+            : Hash::check($rawOtp, $record->otp_hash);
+
+        if (! $isValidOtp) {
             $remaining = max(0, CustomerEmailOtp::MAX_ATTEMPTS - $record->attempts);
 
             return back()->withErrors([

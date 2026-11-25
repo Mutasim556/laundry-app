@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\HomepageContentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Modules\Admin\Models\Item;
 use Modules\Admin\Models\ItemCategory;
@@ -11,6 +13,9 @@ use Modules\Admin\Models\Service;
 
 class HomeController extends Controller
 {
+    public function __construct(
+        protected HomepageContentService $cms
+    ) {}
     /**
      * Default icon mapping for category slugs when no uploaded image is present.
      *
@@ -29,30 +34,24 @@ class HomeController extends Controller
         ];
     }
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        $categories = ItemCategory::query()
-            ->where('is_active', true)
-            ->orderBy('id')
-            ->get();
+        $isPreview = $request->query('preview') === 'draft'
+            && Auth::guard('admin')->check()
+            && Auth::guard('admin')->user()?->can('manage-settings', 'admin');
 
-        $services = Service::query()
-            ->with(['unit', 'category', 'item.category'])
-            ->where('is_active', true)
-            ->where(function ($query) {
-                $query->whereNull('item_id')
-                    ->orWhereHas('item', fn ($iq) => $iq->where('is_active', true));
-            })
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get();
-
+        $payload = $this->cms->getPublicPayload($isPreview);
         $categoryIcons = self::categoryIconMap();
+        $rendered = $this->cms->buildPublicRenderData($payload, $categoryIcons);
 
         return view('welcome', [
-            'categories' => $categories,
-            'services' => $services,
+            'homepagePayload' => $payload,
+            'homepageSections' => $rendered['sections'],
+            'categories' => $rendered['categories'],
+            'services' => $rendered['services'],
             'categoryIcons' => $categoryIcons,
+            'isPreviewDraft' => $isPreview,
+            'cms' => $this->cms,
         ]);
     }
 
@@ -61,6 +60,13 @@ class HomeController extends Controller
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:80'],
         ]);
+
+        $payload = $this->cms->getPublicPayload(false);
+        $searchCfg = $payload['search'] ?? [];
+        $maxLimit = max(1, min(15, (int) ($searchCfg['max_suggestions'] ?? 5)));
+        $showCategories = array_key_exists('show_categories', $searchCfg) ? (bool) $searchCfg['show_categories'] : true;
+        $showServices = array_key_exists('show_services', $searchCfg) ? (bool) $searchCfg['show_services'] : true;
+        $showItems = array_key_exists('show_items', $searchCfg) ? (bool) $searchCfg['show_items'] : true;
 
         $term = trim((string) $validated['q']);
         if (mb_strlen($term) < 2) {
@@ -79,7 +85,7 @@ class HomeController extends Controller
         $like = '%' . addcslashes($term, '%_\\') . '%';
         $iconMap = self::categoryIconMap();
 
-        $categories = ItemCategory::query()
+        $categories = ! $showCategories ? collect() : ItemCategory::query()
             ->where('is_active', true)
             ->where(function ($q) use ($like) {
                 $q->where('name', 'like', $like)
@@ -87,7 +93,7 @@ class HomeController extends Controller
                     ->orWhere('description', 'like', $like);
             })
             ->orderBy('name')
-            ->limit(5)
+            ->limit($maxLimit)
             ->get()
             ->map(function (ItemCategory $cat) use ($iconMap) {
                 $fallback = $iconMap[$cat->slug] ?? '03_laundry_basket.png';
@@ -104,7 +110,7 @@ class HomeController extends Controller
             })
             ->values();
 
-        $items = Item::query()
+        $items = ! $showItems ? collect() : Item::query()
             ->with('category:id,name,slug,is_active')
             ->where('is_active', true)
             ->where(function ($q) {
@@ -116,7 +122,7 @@ class HomeController extends Controller
                     ->orWhere('description', 'like', $like);
             })
             ->orderBy('name')
-            ->limit(5)
+            ->limit($maxLimit)
             ->get()
             ->map(function (Item $item) use ($iconMap) {
                 $cat = $item->category;
@@ -137,7 +143,7 @@ class HomeController extends Controller
             })
             ->values();
 
-        $services = Service::query()
+        $services = ! $showServices ? collect() : Service::query()
             ->with(['unit:id,name', 'category:id,name,slug', 'item:id,name,item_category_id', 'item.category:id,name,slug'])
             ->where('is_active', true)
             ->where(function ($q) {
@@ -151,7 +157,7 @@ class HomeController extends Controller
                     ->orWhereHas('item', fn ($iq) => $iq->where('name', 'like', $like));
             })
             ->orderBy('name')
-            ->limit(6)
+            ->limit($maxLimit)
             ->get()
             ->map(function (Service $svc) use ($iconMap) {
                 $catSlug = $svc->category?->slug ?? $svc->item?->category?->slug;

@@ -54,7 +54,11 @@
                     <div class="text-center mb-4">
                         <h1 class="h3 fw-bold text-dark mb-1">Verify Your Email</h1>
                         <p class="text-secondary small mb-1">
-                            We've sent a 6-digit verification code to your email address.
+                            @if (!empty($isTestingOtpActive))
+                                Testing environment — use the configured test OTP.
+                            @else
+                                We've sent a 6-digit verification code to your email address.
+                            @endif
                         </p>
                         <div class="small fw-bold text-dark">{{ $email }}</div>
                     </div>

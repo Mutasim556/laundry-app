@@ -18,6 +18,11 @@ Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/api/home/search', [HomeController::class, 'search'])
     ->middleware('throttle:60,1')
     ->name('home.search');
+Route::get('/about', [\App\Http\Controllers\PublicPageController::class, 'about'])->name('about');
+Route::get('/contact', [\App\Http\Controllers\PublicPageController::class, 'contact'])->name('contact');
+Route::post('/contact/enquiry', [\App\Http\Controllers\PublicPageController::class, 'submitEnquiry'])
+    ->middleware('throttle:10,1')
+    ->name('contact.enquiry.store');
 
 Route::get('/services', function (Request $request) {
     $filters = $request->validate([
@@ -28,7 +33,16 @@ Route::get('/services', function (Request $request) {
         'page' => ['nullable', 'integer', 'min:1'],
     ]);
 
-    $categories = ItemCategory::query()->where('is_active', true)->orderBy('id')->get();
+    $svcCms = app(\App\Services\ServicesPageContentService::class);
+    $isPreviewDraft = $request->query('preview') === 'draft'
+        && Auth::guard('admin')->check()
+        && Auth::guard('admin')->user()?->can('manage-settings', 'admin');
+    $servicesPayload = $svcCms->getPublicPayload($isPreviewDraft);
+    $servicesSections = collect($servicesPayload['sections'] ?? [])->sortBy(fn ($s) => (int) ($s['order'] ?? 99))->values();
+    $catalogCfg = $servicesPayload['catalog_config'] ?? [];
+    $catalogOverrides = $catalogCfg['overrides'] ?? [];
+
+    $categories = $svcCms->getVisibleActiveCategories($servicesPayload);
     $hasOtherServices = Service::query()->where('is_active', true)->whereNull('item_category_id')->whereNull('item_id')->exists();
     $selected = $filters['category'] ?? null;
 
@@ -45,7 +59,15 @@ Route::get('/services', function (Request $request) {
     $search = trim($filters['q'] ?? '');
     $sort = $filters['sort'] ?? 'name';
 
+    $hiddenServiceIds = collect($catalogOverrides)
+        ->filter(fn ($ov) => array_key_exists('visible', $ov) && empty($ov['visible']))
+        ->keys()
+        ->map(fn ($id) => (int) $id)
+        ->values()
+        ->all();
+
     $query = Service::query()->with(['unit', 'item'])->where('is_active', true)
+        ->when($hiddenServiceIds !== [], fn ($q) => $q->whereNotIn('id', $hiddenServiceIds))
         ->where(fn ($query) => $query->whereNull('item_id')->orWhereHas('item', fn ($query) => $query->where('is_active', true)))
         ->when($category, fn ($query) => $query->where(function ($query) use ($category) {
             $query->where('item_category_id', $category->id)
@@ -68,8 +90,15 @@ Route::get('/services', function (Request $request) {
         $query->orderBy('price', $sort === 'price-low' ? 'asc' : 'desc');
     }
 
-    $services = $query->orderBy('name')->orderBy('id')->paginate(12)->withQueryString();
-    $data = compact('categories', 'category', 'selected', 'services', 'items', 'hasOtherServices', 'selectedItem', 'search', 'sort', 'hasCategoryServices');
+    $perPage = in_array((int) ($catalogCfg['per_page'] ?? 12), [8, 12, 16, 24], true) ? (int) $catalogCfg['per_page'] : 12;
+    $services = $query->orderBy('name')->orderBy('id')->paginate($perPage)->withQueryString();
+    $featuredServices = $svcCms->getFeaturedServices($servicesPayload);
+
+    $data = compact(
+        'categories', 'category', 'selected', 'services', 'items', 'hasOtherServices',
+        'selectedItem', 'search', 'sort', 'hasCategoryServices',
+        'servicesPayload', 'servicesSections', 'featuredServices', 'isPreviewDraft', 'svcCms', 'catalogOverrides'
+    );
 
     if ($request->expectsJson()) {
         return response()->json([

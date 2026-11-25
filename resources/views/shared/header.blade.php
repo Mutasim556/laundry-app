@@ -1,3 +1,5 @@
+@include('shared.preloader')
+
 <style>
     .desktop-nav-link {
         border-radius: 8px !important;

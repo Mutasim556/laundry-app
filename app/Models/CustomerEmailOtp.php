@@ -14,6 +14,7 @@ class CustomerEmailOtp extends Model
 
     protected $fillable = [
         'email',
+        'mode',
         'otp_hash',
         'expires_at',
         'attempts',
