@@ -27,44 +27,79 @@
         }
         .dp-shell { display: flex; min-height: 100vh; }
         .dp-sidebar {
-            width: 250px;
+            width: 232px;
             background: #FFFFFF;
             border-right: 1px solid #E2E8F0;
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
+            transition: width 0.2s ease;
+        }
+        .dp-sidebar.collapsed {
+            width: 68px;
+        }
+        .dp-sidebar.collapsed .dp-nav-label,
+        .dp-sidebar.collapsed .dp-brand-sub {
+            display: none;
+        }
+        .dp-sidebar.collapsed .dp-nav-link {
+            justify-content: center;
+            padding: 0.55rem 0.5rem;
+            margin: 0.12rem 0.45rem;
+        }
+        .dp-sidebar.collapsed .dp-submenu {
+            padding-left: 0;
         }
         .dp-brand {
-            padding: 1rem 1.1rem;
+            padding: 0.8rem 1rem;
             border-bottom: 1px solid #F1F5F9;
             background: linear-gradient(135deg, #FFFFFF 0%, #FFF8E5 100%);
         }
         .dp-brand-badge {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
+            width: 34px;
+            height: 34px;
+            border-radius: 9px;
             background: var(--dp-yellow);
             color: var(--dp-dark);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
             flex-shrink: 0;
         }
         .dp-nav-link {
             display: flex;
             align-items: center;
-            gap: 0.7rem;
-            padding: 0.62rem 0.9rem;
-            margin: 0.14rem 0.6rem;
+            gap: 0.65rem;
+            padding: 0.52rem 0.8rem;
+            margin: 0.12rem 0.5rem;
             border-radius: 10px;
             color: var(--dp-slate);
-            font-size: 0.875rem;
+            font-size: 0.845rem;
             font-weight: 500;
             text-decoration: none;
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+        .dp-nav-ico {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
         .dp-nav-link:hover { background-color: #FFF8E5; color: var(--dp-dark); }
         .dp-nav-link.active { background-color: var(--dp-yellow); color: var(--dp-dark); font-weight: 700; }
+        .dp-nav-link.active .dp-nav-ico { color: var(--dp-dark) !important; }
+        .dp-group-toggle.is-parent-active {
+            background-color: #FFFDF5;
+            color: var(--dp-dark);
+            font-weight: 600;
+        }
+        .dp-chevron { transition: transform 0.2s ease; }
+        .dp-group-toggle[aria-expanded="true"] .dp-chevron { transform: rotate(180deg); }
+        .dp-submenu { padding-left: 0.75rem; }
+        .dp-sub-link { font-size: 0.815rem; padding: 0.44rem 0.75rem; }
+        @media (prefers-reduced-motion: reduce) {
+            .dp-sidebar, .dp-nav-link, .dp-chevron { transition: none !important; }
+        }
         .dp-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
         .dp-topbar {
             background: #FFFFFF;
@@ -97,29 +132,28 @@
 <body>
 @php $dpUser = Auth::guard('delivery_person')->user(); @endphp
 <div class="dp-shell">
-    <aside class="dp-sidebar">
+    <aside class="dp-sidebar" id="dpSidebar">
         <div class="dp-brand d-flex align-items-center gap-2">
-            <span class="dp-brand-badge"><i class="mdi mdi-motorbike"></i></span>
-            <div class="min-w-0">
-                <div class="fw-bold text-truncate" style="font-size: 0.95rem;">Delivery Portal</div>
-                <div class="small text-muted text-truncate" style="font-size: 0.72rem;">{{ $dpUser?->full_name }}</div>
+            <span class="dp-brand-badge">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+            </span>
+            <div class="dp-nav-label min-w-0">
+                <div class="fw-bold text-truncate" style="font-size: 0.92rem;">Delivery Portal</div>
+                <div class="dp-brand-sub small text-muted text-truncate" style="font-size: 0.72rem;">{{ $dpUser?->full_name }}</div>
             </div>
         </div>
         <nav class="py-2 flex-grow-1">
-            <a href="{{ route('delivery-person.dashboard') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.dashboard') ? 'active' : '' }}"><i class="mdi mdi-view-dashboard"></i><span>Dashboard</span></a>
-            <a href="{{ route('delivery-person.bookings.index') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.bookings.*') ? 'active' : '' }}"><i class="mdi mdi-basket"></i><span>My Bookings</span></a>
-            <a href="{{ route('delivery-person.collections.index') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.collections.*') ? 'active' : '' }}"><i class="mdi mdi-package-up"></i><span>Collections</span></a>
-            <a href="{{ route('delivery-person.final-deliveries.index') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.final-deliveries.*') ? 'active' : '' }}"><i class="mdi mdi-truck-delivery"></i><span>Final Deliveries</span></a>
-            <a href="{{ route('delivery-person.cash-account') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.cash-account') ? 'active' : '' }}"><i class="mdi mdi-cash-multiple"></i><span>Cash Account</span></a>
-            <a href="{{ route('delivery-person.settlements') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.settlements') ? 'active' : '' }}"><i class="mdi mdi-check-circle"></i><span>Settlements</span></a>
-            <a href="{{ route('delivery-person.earnings') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.earnings') ? 'active' : '' }}"><i class="mdi mdi-wallet"></i><span>My Earnings</span></a>
-            <a href="{{ route('delivery-person.profile') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.profile') ? 'active' : '' }}"><i class="mdi mdi-account"></i><span>My Profile</span></a>
-            <a href="{{ route('delivery-person.password.change') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.password.*') ? 'active' : '' }}"><i class="mdi mdi-lock"></i><span>Change Password</span></a>
+            @include('delivery-person-portal.layouts._nav_links', ['navScope' => 'desktop'])
         </nav>
         <div class="p-2 border-top">
             <form method="POST" action="{{ route('delivery-person.logout') }}">
                 @csrf
-                <button type="submit" class="btn btn-sm btn-outline-danger w-100"><i class="mdi mdi-logout me-1"></i>Logout</button>
+                <button type="submit" class="dp-nav-link w-100 border-0 bg-transparent text-danger" title="Logout">
+                    <span class="dp-nav-ico">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    </span>
+                    <span class="dp-nav-label">Logout</span>
+                </button>
             </form>
         </div>
     </aside>
@@ -127,8 +161,11 @@
     <div class="dp-main">
         <header class="dp-topbar">
             <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-sm btn-light d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#dpMobileMenu" aria-label="Menu">
-                    <i class="mdi mdi-menu"></i>
+                <button class="btn btn-sm btn-light d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#dpMobileMenu" aria-label="Open menu">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <button class="btn btn-sm btn-light d-none d-lg-inline-flex" type="button" id="btnToggleDpSidebar" title="Toggle sidebar" aria-label="Toggle sidebar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
                 <span class="fw-bold" style="font-size: 0.95rem;">@yield('page_title', 'Delivery Person Portal')</span>
             </div>
@@ -161,32 +198,39 @@
 </div>
 
 <!-- Mobile Offcanvas Navigation -->
-<div class="offcanvas offcanvas-start" tabindex="-1" id="dpMobileMenu">
-    <div class="offcanvas-header" style="background: #FFF8E5;">
-        <h6 class="offcanvas-title fw-bold">Delivery Person Menu</h6>
+<div class="offcanvas offcanvas-start" tabindex="-1" id="dpMobileMenu" aria-labelledby="dpMobileMenuLabel" style="max-width: 280px;">
+    <div class="offcanvas-header border-bottom" style="background: #FFF8E5;">
+        <h6 class="offcanvas-title fw-bold" id="dpMobileMenuLabel">Delivery Person Menu</h6>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body p-2 d-flex flex-column justify-content-between">
-        <div>
-            <a href="{{ route('delivery-person.dashboard') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.dashboard') ? 'active' : '' }}"><i class="mdi mdi-view-dashboard"></i><span>Dashboard</span></a>
-            <a href="{{ route('delivery-person.bookings.index') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.bookings.*') ? 'active' : '' }}"><i class="mdi mdi-basket"></i><span>My Bookings</span></a>
-            <a href="{{ route('delivery-person.collections.index') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.collections.*') ? 'active' : '' }}"><i class="mdi mdi-package-up"></i><span>Collections</span></a>
-            <a href="{{ route('delivery-person.final-deliveries.index') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.final-deliveries.*') ? 'active' : '' }}"><i class="mdi mdi-truck-delivery"></i><span>Final Deliveries</span></a>
-            <a href="{{ route('delivery-person.cash-account') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.cash-account') ? 'active' : '' }}"><i class="mdi mdi-cash-multiple"></i><span>Cash Account</span></a>
-            <a href="{{ route('delivery-person.settlements') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.settlements') ? 'active' : '' }}"><i class="mdi mdi-check-circle"></i><span>Settlements</span></a>
-            <a href="{{ route('delivery-person.earnings') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.earnings') ? 'active' : '' }}"><i class="mdi mdi-wallet"></i><span>My Earnings</span></a>
-            <a href="{{ route('delivery-person.profile') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.profile') ? 'active' : '' }}"><i class="mdi mdi-account"></i><span>My Profile</span></a>
-            <a href="{{ route('delivery-person.password.change') }}" class="dp-nav-link {{ request()->routeIs('delivery-person.password.*') ? 'active' : '' }}"><i class="mdi mdi-lock"></i><span>Change Password</span></a>
-        </div>
-        <form method="POST" action="{{ route('delivery-person.logout') }}" class="p-2">
+        <nav class="flex-grow-1">
+            @include('delivery-person-portal.layouts._nav_links', ['navScope' => 'mobile'])
+        </nav>
+        <form method="POST" action="{{ route('delivery-person.logout') }}" class="p-2 border-top mt-2">
             @csrf
-            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Logout</button>
+            <button type="submit" class="dp-nav-link w-100 border-0 bg-transparent text-danger">Logout</button>
         </form>
     </div>
 </div>
 
 <script src="{{ asset('admin/dist/libs/jquery/dist/jquery.min.js') }}"></script>
 <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
+<script>
+    (function () {
+        const sidebar = document.getElementById('dpSidebar');
+        const toggleBtn = document.getElementById('btnToggleDpSidebar');
+        const storageKey = 'dp_sidebar_collapsed';
+        if (sidebar && localStorage.getItem(storageKey) === '1') {
+            sidebar.classList.add('collapsed');
+        }
+        toggleBtn?.addEventListener('click', function () {
+            if (!sidebar) return;
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem(storageKey, sidebar.classList.contains('collapsed') ? '1' : '0');
+        });
+    })();
+</script>
 @stack('scripts')
 </body>
 </html>

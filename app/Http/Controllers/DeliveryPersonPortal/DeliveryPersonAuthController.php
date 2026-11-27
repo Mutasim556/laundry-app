@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\DeliveryPersonPortal;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -109,7 +110,7 @@ class DeliveryPersonAuthController extends Controller
         return view('delivery-person-portal.auth.change-password');
     }
 
-    public function updatePassword(Request $request): RedirectResponse
+    public function updatePassword(Request $request): RedirectResponse|JsonResponse
     {
         /** @var DeliveryPerson $person */
         $person = Auth::guard('delivery_person')->user();
@@ -117,13 +118,45 @@ class DeliveryPersonAuthController extends Controller
         $validated = $request->validate([
             'current_password' => ['required', 'string'],
             'password' => ['required', 'confirmed', PasswordRule::min(8)->letters()->numbers()],
+        ], [
+            'password.confirmed' => 'New password confirmation does not match.',
         ]);
 
         if (! Hash::check($validated['current_password'], $person->password)) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Validation failed.',
+                    'errors' => [
+                        'current_password' => ['Current password is incorrect.'],
+                    ],
+                ], 422);
+            }
+
             return back()->withErrors(['current_password' => 'Current password is incorrect.']);
         }
 
+        if (Hash::check($validated['password'], $person->password)) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Validation failed.',
+                    'errors' => [
+                        'password' => ['New password must be different from your current password.'],
+                    ],
+                ], 422);
+            }
+
+            return back()->withErrors(['password' => 'New password must be different from your current password.']);
+        }
+
         $person->forceFill(['password' => $validated['password']])->save();
+        $request->session()->regenerate();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'message' => 'Your portal password has been updated.',
+            ]);
+        }
 
         return back()->with('success', 'Your portal password has been updated.');
     }

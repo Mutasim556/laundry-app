@@ -1,105 +1,140 @@
 @extends('store-portal.layouts.app')
 
-@section('title', 'Incoming Store Handovers')
+@section('title', 'Delivery Person Handovers — Store Portal')
 
 @section('content')
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div>
-        <h4 class="fw-bold mb-0 text-dark">Incoming Store Handovers</h4>
-        <div class="small text-muted">Review collected laundry arriving from Collection Delivery Persons and confirm physical receipt.</div>
+        <h4 class="fw-bold mb-0" style="color: #171717;">Delivery Person Handovers</h4>
+        <div class="small text-muted">Verify physical laundry handovers from Collection Delivery Persons</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{{ route('store.bookings.index') }}" class="btn btn-sm btn-outline-dark">My Bookings</a>
     </div>
 </div>
 
-@if(session('success'))
-    <div class="alert alert-success alert-dismissible fade show py-2 small">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
-@endif
-@if($errors->any())
-    <div class="alert alert-danger py-2 small">
-        <ul class="mb-0 ps-3">@foreach($errors->all() as $err)<li>{{ $err }}</li>@endforeach</ul>
-    </div>
-@endif
-
-<div class="row g-3">
-    @forelse($handovers as $h)
-        @php
-            $b = $h->booking;
-            $dp = $h->collectionDeliveryPerson;
-            $itemsCount = $b?->operationalItems->count() ?? 0;
-            $catCount = $b?->operationalItems->pluck('item_category_id')->filter()->unique()->count() ?? 0;
-            $totalWeight = (float) ($b?->operationalItems->where('pricing_mode', 'weight')->sum('weight_kg') ?? 0);
-            $totalQty = (int) ($b?->operationalItems->where('pricing_mode', '!=', 'weight')->sum('quantity') ?? 0);
-            $summaryParts = [];
-            if ($totalQty > 0) $summaryParts[] = $totalQty . ' pcs';
-            if ($totalWeight > 0) $summaryParts[] = number_format($totalWeight, 2) . ' kg';
-            $itemSummaryText = implode(', ', $summaryParts) ?: ($itemsCount . ' item(s)');
-        @endphp
-        <div class="col-12 col-lg-6">
-            <div class="sp-card p-3 h-100 d-flex flex-column justify-content-between" style="border-left: 4px solid {{ $h->status === 'pending' ? '#F59E0B' : ($h->status === 'accepted' ? '#16A34A' : '#EF4444') }};">
-                <div>
-                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                        <div>
-                            <div class="fw-bold text-dark">{{ $b?->reference ?? 'Booking' }} <span class="text-muted small fw-normal">({{ $h->request_reference }})</span></div>
-                            <div class="small text-muted">Customer: <strong>{{ $b?->customer_name ?? '-' }}</strong></div>
-                        </div>
-                        <span class="badge rounded-pill px-2 py-1" style="{{ $h->status === 'pending' ? 'background-color:#FEF3C7;color:#92400E;' : ($h->status === 'accepted' ? 'background-color:#DCFCE7;color:#15803D;' : 'background-color:#FEE2E2;color:#B91C1C;') }}">
-                            {{ ucfirst($h->status) }}
-                        </span>
-                    </div>
-
-                    <div class="small mb-2 p-2 rounded-2 bg-light border">
-                        <div><strong>Collection Delivery Person:</strong> {{ $dp?->full_name ?? '-' }} ({{ $dp?->phone_display ?: 'No phone' }})</div>
-                        <div><strong>Requested At:</strong> {{ $h->requested_at?->format('d M Y, H:i') }}</div>
-                        <div><strong>Categories / Items:</strong> {{ $catCount }} categories &bull; {{ $itemsCount }} rows ({{ $itemSummaryText }})</div>
-                        @if($h->request_note)
-                            <div class="mt-1 text-muted"><strong>Note:</strong> {{ $h->request_note }}</div>
-                        @endif
-                    </div>
-
-                    @if($h->status === 'accepted')
-                        <div class="small text-success fw-semibold mb-2">
-                            <i class="mdi mdi-check-circle me-1"></i>Accepted by {{ $h->acceptedByStoreUser?->name ?? 'Store Staff' }} at {{ $h->accepted_at?->format('d M Y, H:i') }}
-                        </div>
-                    @elseif($h->status === 'rejected')
-                        <div class="small text-danger mb-2">
-                            <strong>Issue Reported:</strong> {{ $h->rejection_reason }}
-                        </div>
+<!-- Live Pending Handovers Banner (Cross-Month Operational Visibility) -->
+<div class="sp-card p-3 mb-3 sp-anim-card" style="background: {{ $allTimePendingCount > 0 ? '#FFFBEB' : '#F8FAFC' }}; border-color: {{ $allTimePendingCount > 0 ? '#FDE68A' : '#E2E8F0' }};">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="sp-icon-box" style="background: {{ $allTimePendingCount > 0 ? '#FEF3C7' : '#E2E8F0' }}; color: {{ $allTimePendingCount > 0 ? '#92400E' : '#475569' }};">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </span>
+            <div>
+                <div class="fw-bold small" style="color: #171717;">
+                    @if($allTimePendingCount > 0)
+                        <span class="sp-pulse-dot me-1"></span>{{ $allTimePendingCount }} Pending {{ Str::plural('Handover', $allTimePendingCount) }} Awaiting Store Verification
+                    @else
+                        All Handovers Verified
                     @endif
                 </div>
-
-                <div class="d-flex flex-wrap gap-2 pt-2 border-top">
-                    @if($b)
-                        <a href="{{ route('store.bookings.show', $b) }}" class="btn btn-sm btn-light border">View Booking</a>
-                    @endif
-                    @if($h->status === \App\Models\BookingStoreHandover::STATUS_PENDING)
-                        <button type="button"
-                                class="btn btn-sm btn-success js-store-open-accept"
-                                data-action="{{ route('store.handovers.accept', $h) }}"
-                                data-ref="{{ $b?->reference }}"
-                                data-dp="{{ $dp?->full_name }}"
-                                data-summary="{{ $itemSummaryText }}"
-                                data-store="{{ $store->name }}">
-                            Accept &amp; Confirm Received
-                        </button>
-                        <button type="button"
-                                class="btn btn-sm btn-outline-danger js-store-open-reject"
-                                data-action="{{ route('store.handovers.reject', $h) }}"
-                                data-ref="{{ $b?->reference }}">
-                            Report Issue
-                        </button>
-                    @endif
-                </div>
+                <div class="text-muted" style="font-size: 0.78rem;">Toggle "Show All Pending" to review unverified handovers from any month.</div>
             </div>
         </div>
-    @empty
-        <div class="col-12">
-            <div class="sp-card p-4 text-center text-muted">No incoming store handover requests yet.</div>
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="spHoPendingOnly" @checked(!empty($filters['pending_only']))>
+            <label class="form-check-label small fw-semibold" for="spHoPendingOnly">Show All Pending (All Months)</label>
         </div>
-    @endforelse
+    </div>
 </div>
 
-@if($handovers->hasPages())
-    <div class="mt-3">{{ $handovers->links() }}</div>
-@endif
+@include('store-portal.partials.month-bar', [
+    'prefix' => 'spHo',
+    'monthLabel' => $monthLabel,
+    'selectedMonth' => $selectedMonth,
+    'selectedYear' => $selectedYear,
+    'prevMonth' => $prevMonth,
+    'prevYear' => $prevYear,
+    'nextMonth' => $nextMonth,
+    'nextYear' => $nextYear,
+    'currentMonth' => $currentMonth,
+    'currentYear' => $currentYear,
+    'subtitle' => 'Filtered by Handover Request / Acceptance Date',
+])
+
+<!-- Monthly Summary Cards -->
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="sp-card p-3 h-100 sp-anim-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="small text-muted">Total Handovers</div>
+                <span class="sp-icon-box" style="background: #F1F5F9; color: #334155;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+                </span>
+            </div>
+            <div class="fs-4 fw-bold mt-1" id="spHoSumTotal" style="color: #171717;">{{ $summary['total'] }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="sp-card p-3 h-100 sp-anim-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="small text-muted">Pending</div>
+                <span class="sp-icon-box" style="background: #FEF3C7; color: #92400E;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </span>
+            </div>
+            <div class="fs-4 fw-bold mt-1" id="spHoSumPending" style="color: #92400E;">{{ $summary['pending'] }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="sp-card p-3 h-100 sp-anim-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="small text-muted">Accepted</div>
+                <span class="sp-icon-box" style="background: #DCFCE7; color: #166534;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                </span>
+            </div>
+            <div class="fs-4 fw-bold mt-1" id="spHoSumAccepted" style="color: #166534;">{{ $summary['accepted'] }}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="sp-card p-3 h-100 sp-anim-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="small text-muted">Issues Reported</div>
+                <span class="sp-icon-box" style="background: #FEE2E2; color: #991B1B;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4m0 4h.01"/></svg>
+                </span>
+            </div>
+            <div class="fs-4 fw-bold mt-1" id="spHoSumRejected" style="color: #991B1B;">{{ $summary['rejected'] }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- AJAX Filter Bar -->
+<div class="sp-card p-3 mb-3">
+    <form id="spHoFilterForm" class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold mb-1">Search</label>
+            <input type="text" id="spHoSearch" name="q" value="{{ $filters['q'] }}" class="form-control form-control-sm" placeholder="Request ref, booking ref, customer, DP...">
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold mb-1">Handover Status</label>
+            <select id="spHoStatus" name="status" class="form-select form-select-sm">
+                <option value="all" @selected($filters['status'] === 'all')>All Statuses</option>
+                <option value="pending" @selected($filters['status'] === 'pending')>Pending Verification</option>
+                <option value="accepted" @selected($filters['status'] === 'accepted')>Accepted</option>
+                <option value="rejected" @selected($filters['status'] === 'rejected')>Issue Reported</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-3">
+            <label class="form-label small fw-semibold mb-1">Sort By</label>
+            <select id="spHoSort" name="sort" class="form-select form-select-sm">
+                <option value="pending_first" @selected($filters['sort'] === 'pending_first')>Pending First</option>
+                <option value="newest" @selected($filters['sort'] === 'newest')>Newest First</option>
+                <option value="oldest" @selected($filters['sort'] === 'oldest')>Oldest First</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex">
+            <button type="button" id="spHoResetBtn" class="btn btn-sm btn-outline-secondary w-100">Reset Filters</button>
+        </div>
+    </form>
+</div>
+
+<div id="spHoErrorAlert" class="alert alert-danger d-none py-2 small" role="alert"></div>
+
+<div id="spHoResultsWrap" class="sp-ajax-wrap">
+    @include('store-portal.handovers.partials.list')
+</div>
 
 <!-- Accept Confirmation Modal -->
 <div class="modal fade" id="storeAcceptHandoverModal" tabindex="-1" aria-hidden="true">
@@ -155,6 +190,56 @@
 
 @push('scripts')
 <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.StorePortalMonthAjax) {
+            window.StorePortalMonthAjax.init({
+                prefix: 'spHo',
+                baseUrl: '{{ route('store.handovers.index') }}',
+                currentMonth: {{ (int) $currentMonth }},
+                currentYear: {{ (int) $currentYear }},
+                wrapId: 'spHoResultsWrap',
+                errorId: 'spHoErrorAlert',
+                formId: 'spHoFilterForm',
+                resetBtnId: 'spHoResetBtn',
+                paginationSelector: '.sp-ho-pagination a',
+                changeIds: ['spHoStatus', 'spHoSort', 'spHoPendingOnly'],
+                searchIds: ['spHoSearch'],
+                collectParams: function () {
+                    return {
+                        q: (document.getElementById('spHoSearch')?.value || '').trim(),
+                        status: document.getElementById('spHoStatus')?.value || 'all',
+                        sort: document.getElementById('spHoSort')?.value || 'pending_first',
+                        pending_only: document.getElementById('spHoPendingOnly')?.checked ? '1' : '0',
+                    };
+                },
+                onSuccess: function (data) {
+                    if (data.summary) {
+                        const map = {
+                            spHoSumTotal: data.summary.total,
+                            spHoSumPending: data.summary.pending,
+                            spHoSumAccepted: data.summary.accepted,
+                            spHoSumRejected: data.summary.rejected,
+                        };
+                        Object.entries(map).forEach(([id, val]) => {
+                            const el = document.getElementById(id);
+                            if (el && val !== undefined) el.textContent = val;
+                        });
+                    }
+                },
+                onReset: function () {
+                    const q = document.getElementById('spHoSearch');
+                    const status = document.getElementById('spHoStatus');
+                    const sort = document.getElementById('spHoSort');
+                    const pendingOnly = document.getElementById('spHoPendingOnly');
+                    if (q) q.value = '';
+                    if (status) status.value = 'all';
+                    if (sort) sort.value = 'pending_first';
+                    if (pendingOnly) pendingOnly.checked = false;
+                }
+            });
+        }
+    });
+
     document.addEventListener('click', function (e) {
         const acceptBtn = e.target.closest('.js-store-open-accept');
         if (acceptBtn) {

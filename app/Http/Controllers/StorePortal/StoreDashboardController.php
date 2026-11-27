@@ -52,81 +52,190 @@ class StoreDashboardController extends Controller
             ->whereHas('currentStoreAssignment', fn ($q) => $q->where('store_id', $storeId));
     }
 
-    public function dashboard(): View
+    protected function resolveMonthPeriod(Request $request): array
+    {
+        $tz = (string) config('app.timezone', 'UTC');
+        $nowTz = Carbon::now($tz);
+
+        $reqMonth = $request->input('month');
+        $reqYear = $request->input('year');
+        $selectedMonth = is_numeric($reqMonth) && (int) $reqMonth >= 1 && (int) $reqMonth <= 12
+            ? (int) $reqMonth
+            : $nowTz->month;
+        $selectedYear = is_numeric($reqYear) && (int) $reqYear >= 2020 && (int) $reqYear <= 2099
+            ? (int) $reqYear
+            : $nowTz->year;
+
+        $monthStart = Carbon::create($selectedYear, $selectedMonth, 1, 0, 0, 0, $tz);
+        $nextMonthStart = $monthStart->copy()->addMonthNoOverflow()->startOfMonth();
+        $prevMonthDate = $monthStart->copy()->subMonthNoOverflow();
+        $nextMonthDate = $monthStart->copy()->addMonthNoOverflow();
+
+        return [
+            'tz' => $tz,
+            'selectedMonth' => $selectedMonth,
+            'selectedYear' => $selectedYear,
+            'monthLabel' => $monthStart->format('F Y'),
+            'monthStart' => $monthStart,
+            'nextMonthStart' => $nextMonthStart,
+            'monthStartUtc' => $monthStart->copy()->utc()->toDateTimeString(),
+            'nextMonthStartUtc' => $nextMonthStart->copy()->utc()->toDateTimeString(),
+            'prevMonth' => $prevMonthDate->month,
+            'prevYear' => $prevMonthDate->year,
+            'nextMonth' => $nextMonthDate->month,
+            'nextYear' => $nextMonthDate->year,
+            'currentMonth' => $nowTz->month,
+            'currentYear' => $nowTz->year,
+        ];
+    }
+
+    public function dashboard(Request $request): View|JsonResponse
     {
         $storeUser = $this->storeUser();
         $store = $storeUser->store;
+        $period = $this->resolveMonthPeriod($request);
 
-        $allAssigned = $this->storeBookingsBaseQuery($store->id)
-            ->select(['id', 'booking_status', 'completed_operational_stages'])
+        $startStr = $period['monthStartUtc'];
+        $endStr = $period['nextMonthStartUtc'];
+
+        // Monthly Assigned Bookings (filtered by Store assignment date)
+        $monthlyAssigned = $this->storeBookingsBaseQuery($store->id)
+            ->whereHas('currentStoreAssignment', function ($q) use ($startStr, $endStr) {
+                $q->whereRaw('COALESCE(assigned_at, created_at) >= ? AND COALESCE(assigned_at, created_at) < ?', [$startStr, $endStr]);
+            })
+            ->with(['currentStoreAssignment', 'currentStoreEarning', 'operationalItems'])
             ->get();
 
-        $stats = [
-            'total' => $allAssigned->count(),
-            'pending' => 0,
-            'in_progress' => 0,
+        $monthlyStats = [
+            'assigned' => $monthlyAssigned->count(),
+            'received' => 0,
+            'processing' => 0,
             'completed' => 0,
         ];
 
-        foreach ($allAssigned as $row) {
-            $group = $row->getCustomerStatusGroup();
-            if ($group === Booking::CUSTOMER_STATUS_PENDING) {
-                $stats['pending']++;
-            } elseif ($group === Booking::CUSTOMER_STATUS_IN_PROGRESS) {
-                $stats['in_progress']++;
-            } elseif ($group === Booking::CUSTOMER_STATUS_COMPLETED) {
-                $stats['completed']++;
+        $dailyChart = [];
+        foreach ($monthlyAssigned as $bk) {
+            $stages = is_array($bk->completed_operational_stages) ? $bk->completed_operational_stages : [];
+            if (in_array(Booking::STATUS_STORE_RECEIVED, $stages, true) || $bk->booking_status === Booking::STATUS_STORE_RECEIVED) {
+                $monthlyStats['received']++;
+            }
+            if ($bk->booking_status === Booking::STATUS_STORE_PROCESSING) {
+                $monthlyStats['processing']++;
+            }
+            if (in_array(Booking::STATUS_STORE_COMPLETE, $stages, true) || in_array($bk->booking_status, [Booking::STATUS_STORE_COMPLETE, Booking::STATUS_DELIVERY_MAN_ASSIGNED_FOR_STORE_PICKUP, Booking::STATUS_ON_DELIVERY, Booking::STATUS_COMPLETED], true)) {
+                $monthlyStats['completed']++;
+            }
+            $assignDt = $bk->currentStoreAssignment?->assigned_at ?? $bk->currentStoreAssignment?->created_at ?? $bk->created_at;
+            if ($assignDt) {
+                $dayKey = $assignDt->copy()->timezone($period['tz'])->format('d M');
+                $dailyChart[$dayKey] = ($dailyChart[$dayKey] ?? 0) + 1;
             }
         }
 
-        $accountSummary = $this->accountService->getStoreAccountSummary($store);
+        // Monthly Confirmed Handovers (filtered by accepted_at / requested_at)
+        $monthlyHandoversCount = BookingStoreHandover::query()
+            ->where('store_id', $store->id)
+            ->where('status', BookingStoreHandover::STATUS_ACCEPTED)
+            ->whereRaw('COALESCE(accepted_at, requested_at, created_at) >= ? AND COALESCE(accepted_at, requested_at, created_at) < ?', [$startStr, $endStr])
+            ->count();
 
-        $recentBookings = $this->storeBookingsBaseQuery($store->id)
-            ->with([
-                'currentStoreAssignment',
-                'currentStoreEarning',
-                'operationalItems',
+        // Monthly Eligible Store Share (by earning creation/finalization date, multi-currency safe)
+        $monthlyEarningsByCurrency = BookingStoreEarning::query()
+            ->where('store_id', $store->id)
+            ->where('is_current', true)
+            ->where('created_at', '>=', $startStr)
+            ->where('created_at', '<', $endStr)
+            ->whereHas('booking', fn ($q) => $q->where('booking_status', '!=', Booking::STATUS_CANCELLED))
+            ->get()
+            ->groupBy(fn ($e) => strtoupper((string) ($e->currency ?: 'GBP')))
+            ->map(fn ($rows, $cur) => [
+                'currency' => $cur,
+                'net_minor' => (int) $rows->sum('net_store_earnings_minor'),
             ])
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->limit(8)
-            ->get();
+            ->values()
+            ->all();
 
+        // Current Pending Actions (always live across all months)
         $pendingHandoversCount = BookingStoreHandover::query()
             ->where('store_id', $store->id)
             ->where('status', BookingStoreHandover::STATUS_PENDING)
             ->count();
 
-        return view('store-portal.dashboard', [
+        $activeProcessingCount = $this->storeBookingsBaseQuery($store->id)
+            ->whereIn('booking_status', [
+                Booking::STATUS_STORE_ASSIGNED,
+                Booking::STATUS_DELIVERY_MAN_ASSIGNED,
+                Booking::STATUS_FINALIZED,
+                Booking::STATUS_DELIVERY_MAN_PICKED_UP,
+                Booking::STATUS_STORE_RECEIVED,
+                Booking::STATUS_STORE_PROCESSING,
+            ])
+            ->count();
+
+        $recentBookings = $monthlyAssigned->sortByDesc(fn ($b) => $b->currentStoreAssignment?->assigned_at?->timestamp ?? $b->created_at?->timestamp ?? 0)->take(8)->values();
+        $recentHandovers = BookingStoreHandover::query()
+            ->with(['booking:id,reference,customer_name', 'collectionDeliveryPerson:id,full_name'])
+            ->where('store_id', $store->id)
+            ->whereRaw('COALESCE(accepted_at, requested_at, created_at) >= ? AND COALESCE(accepted_at, requested_at, created_at) < ?', [$startStr, $endStr])
+            ->orderByDesc('id')
+            ->limit(6)
+            ->get();
+
+        $accountSummary = $this->accountService->getStoreAccountSummary($store);
+
+        $viewData = array_merge($period, [
             'storeUser' => $storeUser,
             'store' => $store,
-            'stats' => $stats,
+            'monthlyStats' => $monthlyStats,
+            'monthlyHandoversCount' => $monthlyHandoversCount,
+            'monthlyEarningsByCurrency' => $monthlyEarningsByCurrency,
+            'dailyChart' => $dailyChart,
             'pendingHandoversCount' => $pendingHandoversCount,
+            'activeProcessingCount' => $activeProcessingCount,
             'accountSummary' => $accountSummary,
             'recentBookings' => $recentBookings,
+            'recentHandovers' => $recentHandovers,
             'currencyService' => $this->currencyService,
         ]);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'month' => $period['selectedMonth'],
+                'year' => $period['selectedYear'],
+                'month_label' => $period['monthLabel'],
+                'prev_month' => $period['prevMonth'],
+                'prev_year' => $period['prevYear'],
+                'next_month' => $period['nextMonth'],
+                'next_year' => $period['nextYear'],
+                'results_html' => view('store-portal.partials.dashboard-content', $viewData)->render(),
+            ]);
+        }
+
+        return view('store-portal.dashboard', $viewData);
     }
 
-    public function bookings(Request $request): View
+    public function bookings(Request $request): View|JsonResponse
     {
         $storeUser = $this->storeUser();
         $store = $storeUser->store;
+        $period = $this->resolveMonthPeriod($request);
 
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:60'],
-            'from_date' => ['nullable', 'date'],
-            'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
             'status' => ['nullable', 'string', 'in:all,new,in_progress,completed,cancelled'],
+            'store_stage' => ['nullable', 'string', 'in:all,awaiting_receive,store_received,store_processing,store_complete'],
             'pricing' => ['nullable', 'string', 'in:all,finalized,not_finalized'],
+            'sort' => ['nullable', 'string', 'in:assigned_desc,assigned_asc,updated_desc,scheduled_desc'],
+            'active_only' => ['nullable', 'boolean'],
         ]);
 
         $search = trim((string) ($validated['q'] ?? ''));
-        $fromDate = $validated['from_date'] ?? null;
-        $toDate = $validated['to_date'] ?? null;
         $statusFilter = (string) ($validated['status'] ?? 'all');
+        $storeStage = (string) ($validated['store_stage'] ?? 'all');
         $pricingFilter = (string) ($validated['pricing'] ?? 'all');
-        $tz = (string) config('app.timezone', 'UTC');
+        $sort = (string) ($validated['sort'] ?? 'assigned_desc');
+        $activeOnly = $request->boolean('active_only');
 
         $query = $this->storeBookingsBaseQuery($store->id)
             ->with([
@@ -135,14 +244,22 @@ class StoreDashboardController extends Controller
                 'operationalItems',
             ]);
 
+        if (! $activeOnly) {
+            $startStr = $period['monthStartUtc'];
+            $endStr = $period['nextMonthStartUtc'];
+            $query->whereHas('currentStoreAssignment', function ($q) use ($startStr, $endStr) {
+                $q->whereRaw('COALESCE(assigned_at, created_at) >= ? AND COALESCE(assigned_at, created_at) < ?', [$startStr, $endStr]);
+            });
+        } else {
+            $query->whereNotIn('booking_status', [Booking::STATUS_COMPLETED, Booking::STATUS_DELIVERED, Booking::STATUS_CANCELLED]);
+        }
+
         if ($search !== '') {
-            $query->where('reference', 'like', "%{$search}%");
-        }
-        if ($fromDate) {
-            $query->where('created_at', '>=', Carbon::parse($fromDate, $tz)->startOfDay()->utc());
-        }
-        if ($toDate) {
-            $query->where('created_at', '<=', Carbon::parse($toDate, $tz)->endOfDay()->utc());
+            $query->where(function ($q) use ($search) {
+                $q->where('reference', 'like', "%{$search}%")
+                    ->orWhere('customer_name', 'like', "%{$search}%")
+                    ->orWhere('address_snapshot', 'like', "%{$search}%");
+            });
         }
 
         if ($statusFilter !== 'all') {
@@ -168,32 +285,94 @@ class StoreDashboardController extends Controller
             };
         }
 
+        if ($storeStage !== 'all') {
+            match ($storeStage) {
+                'awaiting_receive' => $query->where(function ($q) {
+                    $q->whereNull('completed_operational_stages')
+                        ->orWhere('completed_operational_stages', 'not like', '%"' . Booking::STATUS_STORE_RECEIVED . '"%');
+                }),
+                'store_received' => $query->where('booking_status', Booking::STATUS_STORE_RECEIVED),
+                'store_processing' => $query->where('booking_status', Booking::STATUS_STORE_PROCESSING),
+                'store_complete' => $query->where(function ($q) {
+                    $q->where('booking_status', Booking::STATUS_STORE_COMPLETE)
+                        ->orWhere('completed_operational_stages', 'like', '%"' . Booking::STATUS_STORE_COMPLETE . '"%');
+                }),
+                default => null,
+            };
+        }
+
         if ($pricingFilter === 'finalized') {
             $query->whereHas('currentStoreEarning');
         } elseif ($pricingFilter === 'not_finalized') {
             $query->whereDoesntHave('currentStoreEarning');
         }
 
-        $bookings = $query->orderByDesc('created_at')->orderByDesc('id')->paginate(10)->withQueryString();
+        match ($sort) {
+            'assigned_asc' => $query->orderBy('created_at')->orderBy('id'),
+            'updated_desc' => $query->orderByDesc('updated_at')->orderByDesc('id'),
+            default => $query->orderByDesc('created_at')->orderByDesc('id'),
+        };
+
+        $allMatched = (clone $query)->get();
+        $summary = [
+            'total' => $allMatched->count(),
+            'waiting_receive' => 0,
+            'processing' => 0,
+            'store_completed' => 0,
+            'pending_handover' => 0,
+        ];
+        foreach ($allMatched as $bk) {
+            $stages = is_array($bk->completed_operational_stages) ? $bk->completed_operational_stages : [];
+            if (! in_array(Booking::STATUS_STORE_RECEIVED, $stages, true)) {
+                $summary['waiting_receive']++;
+                $summary['pending_handover']++;
+            } elseif ($bk->booking_status === Booking::STATUS_STORE_PROCESSING || $bk->booking_status === Booking::STATUS_STORE_RECEIVED) {
+                $summary['processing']++;
+            }
+            if (in_array(Booking::STATUS_STORE_COMPLETE, $stages, true) || $bk->booking_status === Booking::STATUS_STORE_COMPLETE) {
+                $summary['store_completed']++;
+            }
+        }
+
+        $bookings = $query->paginate(10)->withQueryString();
         $statusService = app(StoreOperationalStatusService::class);
         $storeStatusMap = $bookings->getCollection()->mapWithKeys(
             fn (Booking $bk) => [$bk->id => $statusService->getStatusForBooking($bk)]
         );
 
-        return view('store-portal.bookings.index', [
+        $viewData = array_merge($period, [
             'storeUser' => $storeUser,
             'store' => $store,
             'bookings' => $bookings,
             'storeStatusMap' => $storeStatusMap,
             'currencyService' => $this->currencyService,
+            'summary' => $summary,
             'filters' => [
                 'q' => $search,
-                'from_date' => $fromDate,
-                'to_date' => $toDate,
                 'status' => $statusFilter,
+                'store_stage' => $storeStage,
                 'pricing' => $pricingFilter,
+                'sort' => $sort,
+                'active_only' => $activeOnly,
             ],
         ]);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'month' => $period['selectedMonth'],
+                'year' => $period['selectedYear'],
+                'month_label' => $period['monthLabel'],
+                'prev_month' => $period['prevMonth'],
+                'prev_year' => $period['prevYear'],
+                'next_month' => $period['nextMonth'],
+                'next_year' => $period['nextYear'],
+                'summary' => $summary,
+                'results_html' => view('store-portal.bookings.partials.table', $viewData)->render(),
+            ]);
+        }
+
+        return view('store-portal.bookings.index', $viewData);
     }
 
     public function showBooking(Booking $booking): View
@@ -314,41 +493,74 @@ class StoreDashboardController extends Controller
         ]);
     }
 
-    public function account(Request $request): View
+    public function account(Request $request): View|JsonResponse
     {
         $storeUser = $this->storeUser();
         $store = $storeUser->store;
+        $period = $this->resolveMonthPeriod($request);
 
         $validated = $request->validate([
-            'from_date' => ['nullable', 'date'],
-            'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
             'type' => ['nullable', 'string', 'in:all,booking_earning,payout,positive_adjustment,negative_adjustment,reversal'],
             'direction' => ['nullable', 'string', 'in:all,credit,debit'],
             'currency' => ['nullable', 'string', 'max:10'],
             'q' => ['nullable', 'string', 'max:60'],
+            'sort' => ['nullable', 'string', 'in:newest,oldest,amount_desc'],
         ]);
 
-        $tz = (string) config('app.timezone', 'UTC');
-        $fromDate = $validated['from_date'] ?? null;
-        $toDate = $validated['to_date'] ?? null;
         $typeFilter = (string) ($validated['type'] ?? 'all');
         $directionFilter = (string) ($validated['direction'] ?? 'all');
         $currencyFilter = strtoupper(trim((string) ($validated['currency'] ?? 'all')));
         $search = trim((string) ($validated['q'] ?? ''));
+        $sort = (string) ($validated['sort'] ?? 'newest');
 
+        // Current authoritative balances (never filtered by month)
         $accountSummary = $this->accountService->getStoreAccountSummary($store);
         $currencies = array_keys($accountSummary);
 
+        $startStr = $period['monthStartUtc'];
+        $endStr = $period['nextMonthStartUtc'];
+
+        // Selected-month financial activity
+        $monthEarnings = BookingStoreEarning::query()
+            ->where('store_id', $store->id)
+            ->where('is_current', true)
+            ->where('created_at', '>=', $startStr)
+            ->where('created_at', '<', $endStr)
+            ->whereHas('booking', fn ($q) => $q->where('booking_status', '!=', Booking::STATUS_CANCELLED))
+            ->get()
+            ->groupBy(fn ($e) => strtoupper((string) ($e->currency ?: 'GBP')));
+
+        $monthlyActivityByCurrency = [];
+        foreach ($monthEarnings as $cur => $rows) {
+            $monthlyActivityByCurrency[$cur] = [
+                'currency' => $cur,
+                'store_share_minor' => (int) $rows->sum('net_store_earnings_minor'),
+                'commission_minor' => (int) $rows->sum('commission_amount_minor'),
+                'payout_minor' => 0,
+            ];
+        }
+
+        $monthPayouts = StoreTransaction::query()
+            ->where('store_id', $store->id)
+            ->where('transaction_type', StoreTransaction::TYPE_PAYOUT)
+            ->where('created_at', '>=', $startStr)
+            ->where('created_at', '<', $endStr)
+            ->get()
+            ->groupBy(fn ($t) => strtoupper((string) ($t->currency ?: 'GBP')));
+
+        foreach ($monthPayouts as $cur => $rows) {
+            if (! isset($monthlyActivityByCurrency[$cur])) {
+                $monthlyActivityByCurrency[$cur] = ['currency' => $cur, 'store_share_minor' => 0, 'commission_minor' => 0, 'payout_minor' => 0];
+            }
+            $monthlyActivityByCurrency[$cur]['payout_minor'] = (int) $rows->sum(fn ($t) => StoreAccountService::decimalToMinor($t->amount));
+        }
+
         $txQuery = StoreTransaction::query()
             ->where('store_id', $store->id)
-            ->with('booking:id,reference');
+            ->with('booking:id,reference')
+            ->where('created_at', '>=', $startStr)
+            ->where('created_at', '<', $endStr);
 
-        if ($fromDate) {
-            $txQuery->where('created_at', '>=', Carbon::parse($fromDate, $tz)->startOfDay()->utc());
-        }
-        if ($toDate) {
-            $txQuery->where('created_at', '<=', Carbon::parse($toDate, $tz)->endOfDay()->utc());
-        }
         if ($typeFilter !== 'all') {
             $txQuery->where('transaction_type', $typeFilter);
         }
@@ -361,11 +573,18 @@ class StoreDashboardController extends Controller
         if ($search !== '') {
             $txQuery->where(function ($q) use ($search) {
                 $q->where('reference', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
                     ->orWhereHas('booking', fn ($bq) => $bq->where('reference', 'like', "%{$search}%"));
             });
         }
 
-        $transactions = $txQuery->orderByDesc('created_at')->orderByDesc('id')->paginate(15)->withQueryString();
+        match ($sort) {
+            'oldest' => $txQuery->orderBy('created_at')->orderBy('id'),
+            'amount_desc' => $txQuery->orderByDesc('amount')->orderByDesc('id'),
+            default => $txQuery->orderByDesc('created_at')->orderByDesc('id'),
+        };
+
+        $transactions = $txQuery->paginate(15)->withQueryString();
 
         $postedEarningIds = StoreTransaction::where('store_id', $store->id)
             ->where('transaction_type', StoreTransaction::TYPE_BOOKING_EARNING)
@@ -383,23 +602,40 @@ class StoreDashboardController extends Controller
             ->limit(10)
             ->get();
 
-        return view('store-portal.account.index', [
+        $viewData = array_merge($period, [
             'storeUser' => $storeUser,
             'store' => $store,
             'accountSummary' => $accountSummary,
+            'monthlyActivityByCurrency' => array_values($monthlyActivityByCurrency),
             'currencies' => $currencies,
             'transactions' => $transactions,
             'pendingItems' => $pendingItems,
             'currencyService' => $this->currencyService,
             'filters' => [
-                'from_date' => $fromDate,
-                'to_date' => $toDate,
                 'type' => $typeFilter,
                 'direction' => $directionFilter,
                 'currency' => $currencyFilter === 'ALL' ? 'all' : $currencyFilter,
                 'q' => $search,
+                'sort' => $sort,
             ],
         ]);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'month' => $period['selectedMonth'],
+                'year' => $period['selectedYear'],
+                'month_label' => $period['monthLabel'],
+                'prev_month' => $period['prevMonth'],
+                'prev_year' => $period['prevYear'],
+                'next_month' => $period['nextMonth'],
+                'next_year' => $period['nextYear'],
+                'monthly_html' => view('store-portal.account.partials.monthly-activity', $viewData)->render(),
+                'results_html' => view('store-portal.account.partials.transactions-table', $viewData)->render(),
+            ]);
+        }
+
+        return view('store-portal.account.index', $viewData);
     }
 
     public function profile(): View
@@ -425,7 +661,7 @@ class StoreDashboardController extends Controller
         ]);
     }
 
-    public function updateProfile(Request $request): RedirectResponse
+    public function updateProfile(Request $request): RedirectResponse|JsonResponse
     {
         $storeUser = $this->storeUser();
 
@@ -441,6 +677,15 @@ class StoreDashboardController extends Controller
                 ->where('id', '!=', $storeUser->id)
                 ->exists();
             if ($conflict) {
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => 'Validation failed.',
+                        'errors' => [
+                            'phone' => ['This phone number is already associated with another store account.'],
+                        ],
+                    ], 422);
+                }
+
                 return back()->withErrors(['phone' => 'This phone number is already associated with another store account.'])->withInput();
             }
         }
@@ -451,6 +696,18 @@ class StoreDashboardController extends Controller
             'phone' => $validated['phone'] ? trim($validated['phone']) : null,
             'phone_normalized' => $normalized,
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'message' => 'Your store account profile has been updated.',
+                'store_user' => [
+                    'name' => $storeUser->name,
+                    'phone_country_code' => $storeUser->phone_country_code,
+                    'phone' => $storeUser->phone,
+                ],
+            ]);
+        }
 
         return back()->with('success', 'Your store account profile has been updated.');
     }
@@ -465,48 +722,157 @@ class StoreDashboardController extends Controller
         ]);
     }
 
-    public function updatePassword(Request $request): RedirectResponse
+    public function updatePassword(Request $request): RedirectResponse|JsonResponse
     {
         $storeUser = $this->storeUser();
 
         $validated = $request->validate([
             'current_password' => ['required', 'string'],
             'password' => ['required', 'confirmed', PasswordRule::defaults()],
+        ], [
+            'password.confirmed' => 'New password confirmation does not match.',
         ]);
 
         if (! Hash::check($validated['current_password'], $storeUser->password)) {
-            return back()->withErrors(['current_password' => 'Your current password is incorrect.']);
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Validation failed.',
+                    'errors' => [
+                        'current_password' => ['Current password is incorrect.'],
+                    ],
+                ], 422);
+            }
+
+            return back()->withErrors(['current_password' => 'Current password is incorrect.']);
+        }
+
+        if (Hash::check($validated['password'], $storeUser->password)) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Validation failed.',
+                    'errors' => [
+                        'password' => ['New password must be different from your current password.'],
+                    ],
+                ], 422);
+            }
+
+            return back()->withErrors(['password' => 'New password must be different from your current password.']);
         }
 
         $storeUser->update([
             'password' => $validated['password'],
         ]);
 
+        $request->session()->regenerate();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'message' => 'Password updated successfully.',
+            ]);
+        }
+
         return back()->with('success', 'Password updated successfully.');
     }
 
-    public function handovers(): View
+    public function handovers(Request $request): View|JsonResponse
     {
         $storeUser = $this->storeUser();
         $store = $storeUser->store;
+        $period = $this->resolveMonthPeriod($request);
 
-        $handovers = BookingStoreHandover::query()
+        $validated = $request->validate([
+            'status' => ['nullable', 'string', 'in:all,pending,accepted,rejected'],
+            'q' => ['nullable', 'string', 'max:60'],
+            'sort' => ['nullable', 'string', 'in:pending_first,newest,oldest'],
+            'pending_only' => ['nullable', 'boolean'],
+        ]);
+
+        $statusFilter = (string) ($validated['status'] ?? 'all');
+        $search = trim((string) ($validated['q'] ?? ''));
+        $sort = (string) ($validated['sort'] ?? 'pending_first');
+        $pendingOnly = $request->boolean('pending_only');
+
+        $allTimePendingCount = BookingStoreHandover::query()
+            ->where('store_id', $store->id)
+            ->where('status', BookingStoreHandover::STATUS_PENDING)
+            ->count();
+
+        $query = BookingStoreHandover::query()
             ->with([
                 'booking.operationalItems',
                 'collectionDeliveryPerson',
                 'acceptedByStoreUser',
                 'rejectedByStoreUser',
             ])
-            ->where('store_id', $store->id)
-            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
-            ->orderByDesc('requested_at')
-            ->paginate(15);
+            ->where('store_id', $store->id);
 
-        return view('store-portal.handovers.index', [
+        if ($pendingOnly) {
+            $query->where('status', BookingStoreHandover::STATUS_PENDING);
+        } else {
+            $query->whereRaw('COALESCE(accepted_at, requested_at, created_at) >= ? AND COALESCE(accepted_at, requested_at, created_at) < ?', [
+                $period['monthStartUtc'],
+                $period['nextMonthStartUtc'],
+            ]);
+            if ($statusFilter !== 'all') {
+                $query->where('status', $statusFilter);
+            }
+        }
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('request_reference', 'like', "%{$search}%")
+                    ->orWhereHas('booking', fn ($bq) => $bq->where('reference', 'like', "%{$search}%")->orWhere('customer_name', 'like', "%{$search}%"))
+                    ->orWhereHas('collectionDeliveryPerson', fn ($dq) => $dq->where('full_name', 'like', "%{$search}%"));
+            });
+        }
+
+        $allMatched = (clone $query)->get();
+        $summary = [
+            'total' => $allMatched->count(),
+            'pending' => $allMatched->where('status', BookingStoreHandover::STATUS_PENDING)->count(),
+            'accepted' => $allMatched->where('status', BookingStoreHandover::STATUS_ACCEPTED)->count(),
+            'rejected' => $allMatched->where('status', BookingStoreHandover::STATUS_REJECTED)->count(),
+        ];
+
+        match ($sort) {
+            'newest' => $query->orderByDesc('requested_at')->orderByDesc('id'),
+            'oldest' => $query->orderBy('requested_at')->orderBy('id'),
+            default => $query->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")->orderByDesc('requested_at'),
+        };
+
+        $handovers = $query->paginate(12)->withQueryString();
+
+        $viewData = array_merge($period, [
             'storeUser' => $storeUser,
             'store' => $store,
             'handovers' => $handovers,
+            'summary' => $summary,
+            'allTimePendingCount' => $allTimePendingCount,
+            'filters' => [
+                'status' => $statusFilter,
+                'q' => $search,
+                'sort' => $sort,
+                'pending_only' => $pendingOnly,
+            ],
         ]);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'status' => 'ok',
+                'month' => $period['selectedMonth'],
+                'year' => $period['selectedYear'],
+                'month_label' => $period['monthLabel'],
+                'prev_month' => $period['prevMonth'],
+                'prev_year' => $period['prevYear'],
+                'next_month' => $period['nextMonth'],
+                'next_year' => $period['nextYear'],
+                'summary' => $summary,
+                'results_html' => view('store-portal.handovers.partials.list', $viewData)->render(),
+            ]);
+        }
+
+        return view('store-portal.handovers.index', $viewData);
     }
 
     public function acceptHandover(Request $request, BookingStoreHandover $handover): RedirectResponse|JsonResponse

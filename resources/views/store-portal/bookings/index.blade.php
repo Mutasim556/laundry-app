@@ -6,38 +6,38 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div>
         <h4 class="fw-bold mb-0" style="color: #171717;">Assigned Bookings</h4>
-        <div class="small" style="color: #475569;">All bookings currently assigned to {{ $store->name }}.</div>
+        <div class="small" style="color: #475569;">Month-wise assigned bookings for {{ $store->name }} (filtered by Store assignment date).</div>
+    </div>
+    <div class="form-check form-switch m-0">
+        <input class="form-check-input" type="checkbox" id="spBkActiveOnlySwitch" @checked(!empty($filters['active_only']))>
+        <label class="form-check-label small fw-semibold" for="spBkActiveOnlySwitch">Active / Pending Work (All Months)</label>
     </div>
 </div>
 
-<!-- Filters -->
-<div class="sp-card p-3 mb-3">
-    <div class="d-flex flex-wrap gap-2 mb-2 pb-2 border-bottom">
-        @foreach(['all' => 'All', 'new' => 'New', 'in_progress' => 'In Progress', 'completed' => 'Completed'] as $k => $lbl)
-            <a href="{{ route('store.bookings.index', array_filter(['status' => $k, 'q' => $filters['q'], 'from_date' => $filters['from_date'], 'to_date' => $filters['to_date'], 'pricing' => $filters['pricing']])) }}"
-               class="btn btn-sm {{ $filters['status'] === $k ? 'sp-btn-yellow' : 'btn-outline-secondary' }}"
-               style="border-radius: 999px;">
-                {{ $lbl }}
-            </a>
-        @endforeach
-    </div>
+@include('store-portal.partials.month-bar', [
+    'prefix' => 'spBk',
+    'subtitle' => 'Showing bookings assigned in the selected month.',
+])
 
-    <form method="GET" action="{{ route('store.bookings.index') }}" class="row g-2 align-items-end">
-        <div class="col-12 col-md-3">
-            <label class="form-label small fw-semibold mb-1">Booking Reference</label>
-            <input type="text" name="q" value="{{ $filters['q'] }}" class="form-control form-control-sm" placeholder="Search reference...">
+<!-- 5 Monthly Summary Cards -->
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md"><div class="sp-card sp-anim-card p-3 bg-white"><div class="small text-muted fw-semibold">Total Assigned</div><div class="fs-5 fw-bold text-dark" id="spBkSumTotal">{{ $summary['total'] }}</div></div></div>
+    <div class="col-6 col-md"><div class="sp-card sp-anim-card p-3" style="background:#FFF8E5; border-color:#FDE68A;"><div class="small fw-semibold text-warning-emphasis">Waiting Receive</div><div class="fs-5 fw-bold text-dark" id="spBkSumWait">{{ $summary['waiting_receive'] }}</div></div></div>
+    <div class="col-6 col-md"><div class="sp-card sp-anim-card p-3" style="background:#EFF6FF; border-color:#BFDBFE;"><div class="small fw-semibold text-primary">Processing</div><div class="fs-5 fw-bold text-dark" id="spBkSumProc">{{ $summary['processing'] }}</div></div></div>
+    <div class="col-6 col-md"><div class="sp-card sp-anim-card p-3" style="background:#ECFDF5; border-color:#A7F3D0;"><div class="small fw-semibold text-success">Store Completed</div><div class="fs-5 fw-bold text-dark" id="spBkSumComp">{{ $summary['store_completed'] }}</div></div></div>
+    <div class="col-12 col-md"><div class="sp-card sp-anim-card p-3" style="background:#F5F3FF; border-color:#DDD6FE;"><div class="small fw-semibold" style="color:#6D28D9;">Pending Handover</div><div class="fs-5 fw-bold text-dark" id="spBkSumHand">{{ $summary['pending_handover'] }}</div></div></div>
+</div>
+
+<!-- AJAX Filter Bar -->
+<div class="sp-card p-3 mb-3">
+    <form id="spBkFilterForm" method="GET" action="{{ route('store.bookings.index') }}" class="row g-2 align-items-end small">
+        <div class="col-12 col-lg-3">
+            <label class="form-label fw-semibold mb-1">Search</label>
+            <input type="text" id="spBkSearchInput" name="q" value="{{ $filters['q'] }}" class="form-control form-control-sm" placeholder="Booking ref, customer, postcode...">
         </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label small fw-semibold mb-1">From Date</label>
-            <input type="date" name="from_date" value="{{ $filters['from_date'] }}" class="form-control form-control-sm">
-        </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label small fw-semibold mb-1">To Date</label>
-            <input type="date" name="to_date" value="{{ $filters['to_date'] }}" class="form-control form-control-sm">
-        </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label small fw-semibold mb-1">Status</label>
-            <select name="status" class="form-select form-select-sm">
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label fw-semibold mb-1">Booking Status</label>
+            <select id="spBkStatusSelect" name="status" class="form-select form-select-sm">
                 <option value="all" @selected($filters['status'] === 'all')>All</option>
                 <option value="new" @selected($filters['status'] === 'new')>New</option>
                 <option value="in_progress" @selected($filters['status'] === 'in_progress')>In Progress</option>
@@ -45,96 +45,88 @@
                 <option value="cancelled" @selected($filters['status'] === 'cancelled')>Cancelled</option>
             </select>
         </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label small fw-semibold mb-1">Finalization</label>
-            <select name="pricing" class="form-select form-select-sm">
+        <div class="col-6 col-md-3 col-lg-2">
+            <label class="form-label fw-semibold mb-1">Store Stage</label>
+            <select id="spBkStageSelect" name="store_stage" class="form-select form-select-sm">
+                <option value="all" @selected($filters['store_stage'] === 'all')>All Stages</option>
+                <option value="awaiting_receive" @selected($filters['store_stage'] === 'awaiting_receive')>Waiting Receive</option>
+                <option value="store_received" @selected($filters['store_stage'] === 'store_received')>Store Received</option>
+                <option value="store_processing" @selected($filters['store_stage'] === 'store_processing')>Processing</option>
+                <option value="store_complete" @selected($filters['store_stage'] === 'store_complete')>Store Complete</option>
+            </select>
+        </div>
+        <div class="col-6 col-md-2 col-lg-2">
+            <label class="form-label fw-semibold mb-1">Finalization</label>
+            <select id="spBkPricingSelect" name="pricing" class="form-select form-select-sm">
                 <option value="all" @selected($filters['pricing'] === 'all')>All</option>
                 <option value="finalized" @selected($filters['pricing'] === 'finalized')>Finalized</option>
                 <option value="not_finalized" @selected($filters['pricing'] === 'not_finalized')>Not Finalized</option>
             </select>
         </div>
-        <div class="col-12 col-md-1 d-grid">
-            <button type="submit" class="btn btn-sm btn-dark">Filter</button>
+        <div class="col-6 col-md-2 col-lg-2">
+            <label class="form-label fw-semibold mb-1">Sort</label>
+            <select id="spBkSortSelect" name="sort" class="form-select form-select-sm">
+                <option value="assigned_desc" @selected($filters['sort'] === 'assigned_desc')>Newest Assigned</option>
+                <option value="assigned_asc" @selected($filters['sort'] === 'assigned_asc')>Oldest Assigned</option>
+                <option value="updated_desc" @selected($filters['sort'] === 'updated_desc')>Recently Updated</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-2 col-lg-1 d-grid">
+            <button type="button" id="spBkResetBtn" class="btn btn-sm btn-outline-secondary">Reset</button>
         </div>
     </form>
 </div>
 
-<!-- Bookings Table -->
-<div class="sp-card p-3">
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead class="table-light">
-                <tr class="small text-uppercase" style="color: #475569;">
-                    <th>Booking Reference</th>
-                    <th>Booking Date</th>
-                    <th>Collection Schedule</th>
-                    <th>Delivery Schedule</th>
-                    <th>Customer / Hotel</th>
-                    <th>Operational Status</th>
-                    <th>Pricing</th>
-                    <th>Store Net Amount</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($bookings as $bk)
-                    @php
-                        $sched = $bk->schedule_snapshot ?? [];
-                        $addr = $bk->address_snapshot ?? [];
-                        $earning = $bk->currentStoreEarning;
-                    @endphp
-                    <tr class="small">
-                        <td class="fw-bold text-nowrap">{{ $bk->reference }}</td>
-                        <td class="text-nowrap">{{ $bk->created_at?->format('d M Y') }}</td>
-                        <td class="text-nowrap">{{ $sched['collection_date'] ?? '-' }}<br><span class="text-muted">{{ $sched['collection_slot'] ?? '' }}</span></td>
-                        <td class="text-nowrap">{{ $sched['delivery_date'] ?? '-' }}<br><span class="text-muted">{{ $sched['delivery_slot'] ?? '' }}</span></td>
-                        <td>
-                            <div class="fw-semibold">{{ $bk->customer_name }}</div>
-                            @if(!empty($addr['hotel_name']))
-                                <div class="text-muted" style="font-size: 0.75rem;">{{ $addr['hotel_name'] }} @if(!empty($addr['room_number'])) (Rm {{ $addr['room_number'] }}) @endif</div>
-                            @elseif(!empty($addr['postcode']))
-                                <div class="text-muted" style="font-size: 0.75rem;">{{ $addr['postcode'] }}</div>
-                            @endif
-                        </td>
-                        <td>
-                            @php
-                                $rowStatus = $storeStatusMap[$bk->id] ?? app(\App\Services\StoreOperationalStatusService::class)->getStatusForBooking($bk);
-                            @endphp
-                            <span class="badge rounded-pill px-2 py-1" style="{{ $rowStatus['operational_badge_style'] }}">
-                                {{ $rowStatus['operational_status_label'] }}
-                            </span>
-                            @if($rowStatus['store_workflow_finished'])
-                                <div class="small text-success fw-semibold mt-1" style="font-size: 0.7rem;">Store Workflow Finished</div>
-                            @endif
-                        </td>
-                        <td>
-                            @if($earning)
-                                <span class="badge bg-success-subtle text-success">Finalized</span>
-                            @else
-                                <span class="badge bg-warning-subtle text-warning-emphasis">Not finalized</span>
-                            @endif
-                        </td>
-                        <td class="fw-bold text-nowrap">
-                            @if($earning)
-                                {{ $currencyService->formatMinor((int) $earning->net_store_earnings_minor, $earning->currency) }}
-                            @else
-                                <span class="text-muted fw-normal">Not finalized</span>
-                            @endif
-                        </td>
-                        <td class="text-end">
-                            <a href="{{ route('store.bookings.show', $bk) }}" class="btn btn-sm sp-btn-yellow px-3 text-nowrap">View Details</a>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="9" class="text-center py-4 text-muted">No bookings matched your criteria.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-    @if($bookings->hasPages())
-        <div class="mt-3">{{ $bookings->links() }}</div>
-    @endif
+<div id="spBkError" class="alert alert-danger d-none small py-2 mb-3"></div>
+
+<div id="spBkResultsWrap" class="sp-ajax-wrap">
+    @include('store-portal.bookings.partials.table')
 </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    window.StorePortalMonthAjax.init({
+        prefix: 'spBk',
+        baseUrl: @json(route('store.bookings.index')),
+        currentMonth: {{ $currentMonth }},
+        currentYear: {{ $currentYear }},
+        wrapId: 'spBkResultsWrap',
+        errorId: 'spBkError',
+        formId: 'spBkFilterForm',
+        resetBtnId: 'spBkResetBtn',
+        paginationSelector: '.sp-bk-pagination',
+        changeIds: ['spBkStatusSelect', 'spBkStageSelect', 'spBkPricingSelect', 'spBkSortSelect', 'spBkActiveOnlySwitch'],
+        searchIds: ['spBkSearchInput'],
+        collectParams: function () {
+            return {
+                q: document.getElementById('spBkSearchInput')?.value.trim() || '',
+                status: document.getElementById('spBkStatusSelect')?.value || 'all',
+                store_stage: document.getElementById('spBkStageSelect')?.value || 'all',
+                pricing: document.getElementById('spBkPricingSelect')?.value || 'all',
+                sort: document.getElementById('spBkSortSelect')?.value || 'assigned_desc',
+                active_only: document.getElementById('spBkActiveOnlySwitch')?.checked ? '1' : ''
+            };
+        },
+        onSuccess: function (data) {
+            if (data.summary) {
+                document.getElementById('spBkSumTotal').textContent = data.summary.total ?? 0;
+                document.getElementById('spBkSumWait').textContent = data.summary.waiting_receive ?? 0;
+                document.getElementById('spBkSumProc').textContent = data.summary.processing ?? 0;
+                document.getElementById('spBkSumComp').textContent = data.summary.store_completed ?? 0;
+                document.getElementById('spBkSumHand').textContent = data.summary.pending_handover ?? 0;
+            }
+        },
+        onReset: function () {
+            document.getElementById('spBkSearchInput').value = '';
+            document.getElementById('spBkStatusSelect').value = 'all';
+            document.getElementById('spBkStageSelect').value = 'all';
+            document.getElementById('spBkPricingSelect').value = 'all';
+            document.getElementById('spBkSortSelect').value = 'assigned_desc';
+            document.getElementById('spBkActiveOnlySwitch').checked = false;
+        }
+    });
+});
+</script>
+@endpush
 @endsection
