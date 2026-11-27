@@ -1,91 +1,94 @@
 @extends('store-portal.layouts.app')
 
-@section('title', 'My Store Account')
+@section('title', 'Store Account & Ledger — Store Portal')
 
 @section('content')
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div>
-        <h4 class="fw-bold mb-0" style="color: #171717;">My Store Account</h4>
-        <div class="small" style="color: #475569;">Permanent ledger balance, pending finalized earnings, and immutable transaction history for {{ $store->name }}.</div>
+        <h4 class="fw-bold mb-0" style="color: #171717;">Store Account &amp; Financial Ledger</h4>
+        <div class="small text-muted">All-time balances, monthly earnings activity, and posted ledger transactions</div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="{{ route('store.dashboard') }}" class="btn btn-sm btn-outline-dark">Dashboard</a>
+        <a href="{{ route('store.bookings.index') }}" class="btn btn-sm btn-outline-dark">My Bookings</a>
     </div>
 </div>
 
-<!-- 4 Financial Summary Cards -->
-<div class="row g-3 mb-3">
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="sp-card p-3 h-100" style="background: #ECFDF5; border-color: #86EFAC;">
-            <div class="small fw-bold text-uppercase" style="color: #15803D; font-size: 0.72rem;">Current Balance</div>
-            <div class="fs-4 fw-bold mt-1" style="color: #171717;">
-                @forelse($accountSummary as $row)
-                    <div>{{ $currencyService->formatMinor((int) $row['current_balance_minor'], $row['currency']) }}</div>
-                @empty
-                    0.00
-                @endforelse
-            </div>
-            <div class="small" style="color: #475569; font-size: 0.74rem;">Available posted balance</div>
-        </div>
+<!-- Permanent Overall Account Balances (Never Filtered by Month) -->
+@if(empty($accountSummary))
+    <div class="sp-card p-3 mb-3 text-muted small sp-anim-card">
+        No account balances yet. Store Share credits are posted automatically once a booking's final delivery is Completed.
     </div>
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="sp-card p-3 h-100" style="background: #FFF7E2; border-color: #F5BE48;">
-            <div class="small fw-bold text-uppercase" style="color: #946200; font-size: 0.72rem;">Pending Earnings</div>
-            <div class="fs-4 fw-bold mt-1" style="color: #171717;">
-                @forelse($accountSummary as $row)
-                    <div>{{ $currencyService->formatMinor((int) $row['pending_earnings_minor'], $row['currency']) }}</div>
-                @empty
-                    0.00
-                @endforelse
+@else
+    @foreach($accountSummary as $curr => $row)
+        <div class="sp-card p-3 mb-3 sp-anim-card" style="background: linear-gradient(135deg, #FFFBEB 0%, #FFFFFF 100%); border-color: #FDE68A;">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge rounded-pill px-2 py-1" style="background: #171717; color: #FFC629;">{{ $curr }}</span>
+                    <span class="small fw-bold text-uppercase" style="color: #92400E;">All-Time Account Summary</span>
+                </div>
+                <span class="text-muted" style="font-size: 0.75rem;">Unchanged when switching months</span>
             </div>
-            <div class="small" style="color: #475569; font-size: 0.74rem;">Credited upon final Completed delivery</div>
-        </div>
-    </div>
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="sp-card p-3 h-100" style="background: #EFF6FF; border-color: #93C5FD;">
-            <div class="small fw-bold text-uppercase" style="color: #1D4ED8; font-size: 0.72rem;">Total Earned</div>
-            <div class="fs-4 fw-bold mt-1" style="color: #171717;">
-                @forelse($accountSummary as $row)
-                    <div>{{ $currencyService->formatMinor((int) $row['total_earned_minor'], $row['currency']) }}</div>
-                @empty
-                    0.00
-                @endforelse
+            <div class="row g-2">
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded-2 bg-white border h-100">
+                        <div class="text-muted" style="font-size: 0.75rem;">Current Available Balance</div>
+                        <div class="fs-5 fw-bold mt-1" style="color: #166534;">
+                            {{ $currencyService->formatMinor((int) $row['current_balance_minor'], $curr) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded-2 bg-white border h-100">
+                        <div class="text-muted" style="font-size: 0.75rem;">Pending Earnings</div>
+                        <div class="fs-5 fw-bold mt-1" style="color: #92400E;">
+                            {{ $currencyService->formatMinor((int) $row['pending_earnings_minor'], $curr) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded-2 bg-white border h-100">
+                        <div class="text-muted" style="font-size: 0.75rem;">All-Time Earned</div>
+                        <div class="fs-5 fw-bold mt-1" style="color: #171717;">
+                            {{ $currencyService->formatMinor((int) $row['total_earned_minor'], $curr) }}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded-2 bg-white border h-100">
+                        <div class="text-muted" style="font-size: 0.75rem;">All-Time Paid Out</div>
+                        <div class="fs-5 fw-bold mt-1" style="color: #1D4ED8;">
+                            {{ $currencyService->formatMinor((int) $row['total_paid_out_minor'], $curr) }}
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="small" style="color: #475569; font-size: 0.74rem;">Posted booking earnings</div>
         </div>
-    </div>
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="sp-card p-3 h-100" style="background: #F5F3FF; border-color: #C4B5FD;">
-            <div class="small fw-bold text-uppercase" style="color: #6D28D9; font-size: 0.72rem;">Total Paid Out</div>
-            <div class="fs-4 fw-bold mt-1" style="color: #171717;">
-                @forelse($accountSummary as $row)
-                    <div>{{ $currencyService->formatMinor((int) $row['total_paid_out_minor'], $row['currency']) }}</div>
-                @empty
-                    0.00
-                @endforelse
-            </div>
-            <div class="small" style="color: #475569; font-size: 0.74rem;">Confirmed payout debits</div>
-        </div>
-    </div>
-</div>
+    @endforeach
+@endif
 
 @if($pendingItems->isNotEmpty())
-<div class="sp-card p-3 mb-3" style="background: #FFF8E5; border-color: #FDE68A;">
-    <h6 class="fw-bold mb-2" style="color: #92400E;">Pending Finalized Earnings (Not Yet Credited)</h6>
-    <div class="table-responsive bg-white rounded-3 border">
-        <table class="table table-sm align-middle mb-0 small">
+<div class="sp-card p-3 mb-3 sp-anim-card">
+    <h6 class="fw-bold mb-2" style="color: #171717;">Pending Earnings (Awaiting Final Delivery Completion)</h6>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
             <thead class="table-light">
-                <tr>
-                    <th>Booking Ref</th>
-                    <th>Workflow Stage</th>
-                    <th class="text-end">Eligible Base</th>
+                <tr class="small text-uppercase" style="color: #475569;">
+                    <th>Booking</th>
+                    <th>Status</th>
+                    <th class="text-end">Eligible Amount</th>
                     <th class="text-end">Commission</th>
-                    <th class="text-end">Pending Net</th>
+                    <th class="text-end">Est. Store Share</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($pendingItems as $pe)
-                    <tr>
-                        <td class="fw-bold">
+                    <tr class="small">
+                        <td>
                             @if($pe->booking)
-                                <a href="{{ route('store.bookings.show', $pe->booking) }}" class="text-decoration-none">{{ $pe->booking->reference }}</a>
+                                <a href="{{ route('store.bookings.show', $pe->booking) }}" class="fw-semibold text-decoration-none">{{ $pe->booking->reference }}</a>
+                            @else
+                                -
                             @endif
                         </td>
                         <td>{{ $pe->booking?->getStatusLabel() }}</td>
@@ -100,20 +103,35 @@
 </div>
 @endif
 
-<!-- Transaction Filters -->
+@include('store-portal.partials.month-bar', [
+    'prefix' => 'spAcc',
+    'monthLabel' => $monthLabel,
+    'selectedMonth' => $selectedMonth,
+    'selectedYear' => $selectedYear,
+    'prevMonth' => $prevMonth,
+    'prevYear' => $prevYear,
+    'nextMonth' => $nextMonth,
+    'nextYear' => $nextYear,
+    'currentMonth' => $currentMonth,
+    'currentYear' => $currentYear,
+    'subtitle' => 'Monthly Ledger Activity & Posted Transactions',
+])
+
+<!-- Selected Month Activity -->
+<div id="spAccMonthlyWrap">
+    @include('store-portal.account.partials.monthly-activity')
+</div>
+
+<!-- AJAX Transaction Filters -->
 <div class="sp-card p-3 mb-3">
-    <form method="GET" action="{{ route('store.account.index') }}" class="row g-2 align-items-end">
-        <div class="col-6 col-md-2">
-            <label class="form-label small fw-semibold mb-1">From Date</label>
-            <input type="date" name="from_date" value="{{ $filters['from_date'] }}" class="form-control form-control-sm">
-        </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label small fw-semibold mb-1">To Date</label>
-            <input type="date" name="to_date" value="{{ $filters['to_date'] }}" class="form-control form-control-sm">
+    <form id="spAccFilterForm" class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+            <label class="form-label small fw-semibold mb-1">Search</label>
+            <input type="text" id="spAccSearch" name="q" value="{{ $filters['q'] }}" class="form-control form-control-sm" placeholder="Tx ref, booking ref, notes...">
         </div>
         <div class="col-6 col-md-2">
             <label class="form-label small fw-semibold mb-1">Type</label>
-            <select name="type" class="form-select form-select-sm">
+            <select id="spAccType" name="type" class="form-select form-select-sm">
                 <option value="all" @selected($filters['type'] === 'all')>All Types</option>
                 <option value="booking_earning" @selected($filters['type'] === 'booking_earning')>Booking Earning</option>
                 <option value="payout" @selected($filters['type'] === 'payout')>Payout</option>
@@ -124,74 +142,128 @@
         </div>
         <div class="col-6 col-md-2">
             <label class="form-label small fw-semibold mb-1">Direction</label>
-            <select name="direction" class="form-select form-select-sm">
-                <option value="all" @selected($filters['direction'] === 'all')>All Transactions</option>
+            <select id="spAccDirection" name="direction" class="form-select form-select-sm">
+                <option value="all" @selected($filters['direction'] === 'all')>All Directions</option>
                 <option value="credit" @selected($filters['direction'] === 'credit')>Credits Only</option>
                 <option value="debit" @selected($filters['direction'] === 'debit')>Debits Only</option>
             </select>
         </div>
-        <div class="col-12 col-md-2">
-            <label class="form-label small fw-semibold mb-1">Search</label>
-            <input type="text" name="q" value="{{ $filters['q'] }}" class="form-control form-control-sm" placeholder="Booking or Tx Ref...">
+        <div class="col-6 col-md-2">
+            <label class="form-label small fw-semibold mb-1">Currency</label>
+            <select id="spAccCurrency" name="currency" class="form-select form-select-sm">
+                <option value="all" @selected(($filters['currency'] ?? 'all') === 'all')>All Currencies</option>
+                @foreach($currencies as $currOpt)
+                    <option value="{{ $currOpt }}" @selected(($filters['currency'] ?? 'all') === $currOpt)>{{ $currOpt }}</option>
+                @endforeach
+            </select>
         </div>
-        <div class="col-12 col-md-2 d-flex gap-2">
-            <button type="submit" class="btn btn-sm btn-dark flex-grow-1">Apply</button>
-            <a href="{{ route('store.account.index') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+        <div class="col-6 col-md-2">
+            <label class="form-label small fw-semibold mb-1">Sort By</label>
+            <select id="spAccSort" name="sort" class="form-select form-select-sm">
+                <option value="newest" @selected(($filters['sort'] ?? 'newest') === 'newest')>Newest First</option>
+                <option value="oldest" @selected(($filters['sort'] ?? 'newest') === 'oldest')>Oldest First</option>
+                <option value="amount_desc" @selected(($filters['sort'] ?? 'newest') === 'amount_desc')>Highest Amount</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-1 d-flex">
+            <button type="button" id="spAccResetBtn" class="btn btn-sm btn-outline-secondary w-100">Reset</button>
         </div>
     </form>
 </div>
 
-<!-- Transaction History Table -->
-<div class="sp-card p-3">
-    <h6 class="fw-bold mb-3" style="color: #171717;">Transaction History</h6>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead class="table-light">
-                <tr class="small text-uppercase" style="color: #475569;">
-                    <th>Date &amp; Time</th>
-                    <th>Transaction Reference</th>
-                    <th>Booking Reference</th>
-                    <th>Transaction Type</th>
-                    <th class="text-end">Credit</th>
-                    <th class="text-end">Debit</th>
-                    <th class="text-end">Running Balance</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($transactions as $tx)
-                    <tr class="small">
-                        <td class="text-nowrap">{{ $tx->created_at?->format('d M Y, H:i:s') }}</td>
-                        <td class="fw-semibold text-primary text-nowrap">{{ $tx->reference }}</td>
-                        <td class="text-nowrap">
-                            @if($tx->booking)
-                                <a href="{{ route('store.bookings.show', $tx->booking) }}" class="fw-semibold text-decoration-none">{{ $tx->booking->reference }}</a>
-                            @else
-                                -
-                            @endif
-                        </td>
-                        <td><span class="badge bg-light text-dark border">{{ $tx->type_label }}</span></td>
-                        <td class="text-end fw-bold" style="color: #16A34A;">
-                            {{ $tx->direction === 'credit' ? $tx->currency . ' ' . $tx->amount : '-' }}
-                        </td>
-                        <td class="text-end fw-bold" style="color: #EF4444;">
-                            {{ $tx->direction === 'debit' ? $tx->currency . ' ' . $tx->amount : '-' }}
-                        </td>
-                        <td class="text-end fw-bold" style="color: #171717;">
-                            {{ $tx->balance_after !== null ? $tx->currency . ' ' . $tx->balance_after : '-' }}
-                        </td>
-                        <td>{{ $tx->description }}</td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">No posted account transactions yet. Credits appear automatically when final delivery is Completed.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+<div id="spAccErrorAlert" class="alert alert-danger d-none py-2 small" role="alert"></div>
+
+<div id="spAccResultsWrap" class="sp-ajax-wrap">
+    @include('store-portal.account.partials.transactions-table')
+</div>
+
+<!-- Read-Only Transaction Detail Modal -->
+<div class="modal fade" id="spAccTxDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold">Transaction Details</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body small">
+                <div class="p-3 rounded-2 bg-light border d-flex flex-column gap-2">
+                    <div><strong>Reference:</strong> <span id="txModalRef" class="text-primary fw-semibold"></span></div>
+                    <div><strong>Date &amp; Time:</strong> <span id="txModalDate"></span></div>
+                    <div><strong>Type:</strong> <span id="txModalType"></span></div>
+                    <div><strong>Direction:</strong> <span id="txModalDirection"></span></div>
+                    <div><strong>Amount:</strong> <span id="txModalAmount" class="fw-bold"></span></div>
+                    <div><strong>Balance After:</strong> <span id="txModalBalance" class="fw-bold"></span></div>
+                    <div><strong>Booking Ref:</strong> <span id="txModalBooking"></span></div>
+                    <div><strong>Description:</strong> <span id="txModalDesc"></span></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-dark" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
     </div>
-    @if($transactions->hasPages())
-        <div class="mt-3">{{ $transactions->links() }}</div>
-    @endif
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.StorePortalMonthAjax) {
+            window.StorePortalMonthAjax.init({
+                prefix: 'spAcc',
+                baseUrl: '{{ route('store.account.index') }}',
+                currentMonth: {{ (int) $currentMonth }},
+                currentYear: {{ (int) $currentYear }},
+                wrapId: 'spAccResultsWrap',
+                errorId: 'spAccErrorAlert',
+                formId: 'spAccFilterForm',
+                resetBtnId: 'spAccResetBtn',
+                paginationSelector: '.sp-acc-pagination a',
+                changeIds: ['spAccType', 'spAccDirection', 'spAccCurrency', 'spAccSort'],
+                searchIds: ['spAccSearch'],
+                collectParams: function () {
+                    return {
+                        q: (document.getElementById('spAccSearch')?.value || '').trim(),
+                        type: document.getElementById('spAccType')?.value || 'all',
+                        direction: document.getElementById('spAccDirection')?.value || 'all',
+                        currency: document.getElementById('spAccCurrency')?.value || 'all',
+                        sort: document.getElementById('spAccSort')?.value || 'newest',
+                    };
+                },
+                onSuccess: function (data) {
+                    if (data.monthly_html) {
+                        const monthlyWrap = document.getElementById('spAccMonthlyWrap');
+                        if (monthlyWrap) monthlyWrap.innerHTML = data.monthly_html;
+                    }
+                },
+                onReset: function () {
+                    const q = document.getElementById('spAccSearch');
+                    const type = document.getElementById('spAccType');
+                    const dir = document.getElementById('spAccDirection');
+                    const curr = document.getElementById('spAccCurrency');
+                    const sort = document.getElementById('spAccSort');
+                    if (q) q.value = '';
+                    if (type) type.value = 'all';
+                    if (dir) dir.value = 'all';
+                    if (curr) curr.value = 'all';
+                    if (sort) sort.value = 'newest';
+                }
+            });
+        }
+    });
+
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.js-sp-tx-detail');
+        if (!btn) return;
+        document.getElementById('txModalRef').textContent = btn.dataset.ref || '';
+        document.getElementById('txModalDate').textContent = btn.dataset.date || '';
+        document.getElementById('txModalType').textContent = btn.dataset.type || '';
+        document.getElementById('txModalDirection').textContent = btn.dataset.direction || '';
+        document.getElementById('txModalAmount').textContent = btn.dataset.amount || '';
+        document.getElementById('txModalBalance').textContent = btn.dataset.balance || '';
+        document.getElementById('txModalBooking').textContent = btn.dataset.booking || '-';
+        document.getElementById('txModalDesc').textContent = btn.dataset.desc || '-';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('spAccTxDetailModal')).show();
+    });
+</script>
+@endpush

@@ -4,6 +4,10 @@
         ->orderBy('id')
         ->limit(5)
         ->get(['id', 'name', 'slug']);
+    $footerContact = app(\App\Services\ContactPageContentService::class)->getPublicPayload(false)['contact_info'] ?? [];
+    $footerEmail = trim((string) ($footerContact['support_email'] ?? ''));
+    $footerPhone = trim(($footerContact['phone_country_code'] ?? '') . ' ' . ($footerContact['phone_number'] ?? ''));
+    $footerAvail = trim((string) ($footerContact['availability_text'] ?? ''));
 @endphp
 
 <!-- Shared Customer Desktop Footer -->
@@ -31,7 +35,8 @@
             <div class="col-lg-2 col-md-4">
                 <h6 class="text-white fw-bold mb-3">Company</h6>
                 <ul class="list-unstyled">
-                    <li><a href="{{ url('/#about') }}" class="footer-link">About Us</a></li>
+                    <li><a href="{{ route('about') }}" class="footer-link">About Us</a></li>
+                    <li><a href="{{ route('contact') }}" class="footer-link">Contact Us</a></li>
                     <li><a href="{{ route('services.index') }}" class="footer-link">Pricing &amp; Catalog</a></li>
                     <li><a href="{{ route('booking.services') }}" class="footer-link">Book a Collection</a></li>
                     <li><a href="{{ route('admin.login') }}" class="footer-link">Admin Portal</a></li>
@@ -39,10 +44,16 @@
             </div>
             <div class="col-lg-4 col-md-4">
                 <h6 class="text-white fw-bold mb-3">Get in Touch</h6>
-                <p class="small text-secondary mb-2">Have a question or special laundry request? Reach out to our care team.</p>
-                <p class="small text-secondary mb-1"><strong>Email:</strong> support@freshgolaundry.co.uk</p>
-                <p class="small text-secondary mb-1"><strong>Phone:</strong> +44 (0) 20 1234 5678</p>
-                <p class="small text-secondary"><strong>Hours:</strong> Mon - Sun: 8:00 AM - 9:00 PM</p>
+                <p class="small text-secondary mb-2">{{ $footerContact['description'] ?? 'Have a question or special laundry request? Reach out to our care team.' }}</p>
+                @if($footerEmail !== '')
+                    <p class="small text-secondary mb-1"><strong>Email:</strong> <a href="mailto:{{ $footerEmail }}" class="footer-link d-inline">{{ $footerEmail }}</a></p>
+                @endif
+                @if($footerPhone !== '')
+                    <p class="small text-secondary mb-1"><strong>Phone:</strong> <a href="tel:{{ preg_replace('/[^0-9+]/', '', $footerPhone) }}" class="footer-link d-inline">{{ $footerPhone }}</a></p>
+                @endif
+                @if($footerAvail !== '')
+                    <p class="small text-secondary">{{ $footerAvail }}</p>
+                @endif
             </div>
         </div>
         <div class="border-top border-secondary pt-4 mt-5 text-center text-secondary small">

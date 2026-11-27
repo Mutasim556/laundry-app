@@ -4,6 +4,7 @@ use App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonAuthController;
 use App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonBankAccountController;
 use App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonBookingController;
 use App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonDashboardController;
+use App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonReportsController;
 use App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonWithdrawalController;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +50,15 @@ Route::middleware(['auth:delivery_person', 'delivery_person.active'])->group(fun
     Route::get('cash-account', [DeliveryPersonDashboardController::class, 'cashAccount'])->name('cash-account');
     Route::get('settlements', [DeliveryPersonDashboardController::class, 'settlements'])->name('settlements');
     Route::get('earnings', [DeliveryPersonDashboardController::class, 'earnings'])->name('earnings');
+    Route::get('reports', [DeliveryPersonReportsController::class, 'index'])->name('reports.index');
+    Route::get('reports/overview', [DeliveryPersonReportsController::class, 'overview'])->name('reports.overview');
+    Route::get('reports/collections', [DeliveryPersonReportsController::class, 'collections'])->name('reports.collections');
+    Route::get('reports/final-deliveries', [DeliveryPersonReportsController::class, 'finalDeliveries'])->name('reports.final-deliveries');
+    Route::get('reports/earnings', [DeliveryPersonReportsController::class, 'earnings'])->name('reports.earnings');
+    Route::get('reports/withdrawals', [DeliveryPersonReportsController::class, 'withdrawals'])->name('reports.withdrawals');
+    Route::get('reports/cash-account', [DeliveryPersonReportsController::class, 'cashAccount'])->name('reports.cash-account');
+    Route::get('reports/performance', [DeliveryPersonReportsController::class, 'performance'])->name('reports.performance');
+    Route::get('reports/export', [DeliveryPersonReportsController::class, 'export'])->name('reports.export');
 
     // Bank Accounts (AJAX)
     Route::get('bank-accounts', [DeliveryPersonBankAccountController::class, 'index'])->name('bank-accounts.index');
@@ -64,6 +74,5 @@ Route::middleware(['auth:delivery_person', 'delivery_person.active'])->group(fun
 
     Route::get('profile', [DeliveryPersonDashboardController::class, 'profile'])->name('profile');
     Route::post('profile', [DeliveryPersonDashboardController::class, 'updateProfile'])->name('profile.update');
-    Route::get('change-password', [DeliveryPersonAuthController::class, 'showChangePassword'])->name('password.change');
     Route::post('change-password', [DeliveryPersonAuthController::class, 'updatePassword'])->name('password.update');
 });

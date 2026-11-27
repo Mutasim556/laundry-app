@@ -929,6 +929,18 @@ body.laundry-home-body {
 .custom-offcanvas {
     border-top-left-radius: 24px;
     border-bottom-left-radius: 24px;
+    z-index: 1060 !important;
+    height: 100dvh;
+    max-height: 100dvh;
+}
+.custom-offcanvas .offcanvas-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+.offcanvas-backdrop {
+    z-index: 1055 !important;
 }
 
 

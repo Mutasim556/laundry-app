@@ -3,6 +3,7 @@
 use App\Http\Controllers\StorePortal\StoreAuthController;
 use App\Http\Controllers\StorePortal\StoreBankAccountController;
 use App\Http\Controllers\StorePortal\StoreDashboardController;
+use App\Http\Controllers\StorePortal\StoreReportsController;
 use App\Http\Controllers\StorePortal\StoreWithdrawalController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,15 @@ Route::middleware(['auth:store', 'store.active'])->group(function () {
     Route::post('/handovers/{handover}/reject', [StoreDashboardController::class, 'rejectHandover'])->name('handovers.reject');
     Route::get('/earnings', [StoreDashboardController::class, 'earnings'])->name('earnings.index');
     Route::get('/account', [StoreDashboardController::class, 'account'])->name('account.index');
+    Route::get('/reports', [StoreReportsController::class, 'index'])->name('reports.index');
+    Route::get('/reports/overview', [StoreReportsController::class, 'overview'])->name('reports.overview');
+    Route::get('/reports/financial', [StoreReportsController::class, 'financial'])->name('reports.financial');
+    Route::get('/reports/transactions', [StoreReportsController::class, 'transactions'])->name('reports.transactions');
+    Route::get('/reports/transactions/{transaction}', [StoreReportsController::class, 'transactionDetail'])->name('reports.transactions.show');
+    Route::get('/reports/bookings', [StoreReportsController::class, 'bookings'])->name('reports.bookings');
+    Route::get('/reports/handovers', [StoreReportsController::class, 'handovers'])->name('reports.handovers');
+    Route::get('/reports/performance', [StoreReportsController::class, 'performance'])->name('reports.performance');
+    Route::get('/reports/export', [StoreReportsController::class, 'export'])->name('reports.export');
     Route::get('/profile', [StoreDashboardController::class, 'profile'])->name('profile.show');
 
     // Store Bank Accounts (AJAX)
@@ -43,6 +53,5 @@ Route::middleware(['auth:store', 'store.active'])->group(function () {
     Route::post('/withdrawals', [StoreWithdrawalController::class, 'store'])->name('withdrawals.store');
     Route::get('/withdrawals/{withdrawal}', [StoreWithdrawalController::class, 'show'])->name('withdrawals.show');
     Route::put('/profile', [StoreDashboardController::class, 'updateProfile'])->name('profile.update');
-    Route::get('/change-password', [StoreDashboardController::class, 'showChangePassword'])->name('password.change');
     Route::put('/change-password', [StoreDashboardController::class, 'updatePassword'])->name('password.change.update');
 });

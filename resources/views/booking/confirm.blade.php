@@ -153,6 +153,7 @@
     @endphp
 
     <main class="container booking-main-container"
+          style="padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px));"
           id="bookingConfirmApp"
           data-options-url="{{ route('booking.confirm.options') }}"
           data-currency="{{ $currency }}"
@@ -483,6 +484,11 @@
         </div>
     </main>
 
+    @include('shared.footer')
+    @include('shared.bottom-nav')
+    @include('shared.offcanvas-nav')
+
+    <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
     @if (!empty($stripeConfigured))
         <script src="https://js.stripe.com/v3/"></script>
     @endif

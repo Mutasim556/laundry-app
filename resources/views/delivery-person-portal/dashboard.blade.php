@@ -2,125 +2,92 @@
 @section('title', 'Dashboard')
 @section('page_title', 'Dashboard')
 
+@push('styles')
+<style>
+    .dp-dash-anim {
+        animation: dpDashFadeUp 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+        transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease;
+    }
+    .dp-dash-anim:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+    .dp-kpi-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .dp-dash-anim:hover .dp-kpi-icon {
+        transform: scale(1.1) rotate(-6deg);
+    }
+    .dp-pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #D97706;
+        display: inline-block;
+        animation: dpPulse 1.8s ease-in-out infinite;
+    }
+    #dpDashboardContentWrap.is-loading {
+        opacity: 0.55;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+    @keyframes dpDashFadeUp {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes dpPulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.35); opacity: 0.55; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .dp-dash-anim, .dp-pulse-dot { animation: none !important; }
+        .dp-dash-anim, .dp-kpi-icon { transition: none !important; }
+    }
+</style>
+@endpush
+
 @section('content')
-<div class="row g-2 g-md-3 mb-3">
-    <div class="col-6 col-md-3">
-        <div class="dp-card p-3 h-100" style="background-color: #FFF8E5; border-color: #FDE68A;">
-            <div class="small fw-semibold text-warning-emphasis">Collection Jobs</div>
-            <div class="fs-4 fw-bold text-dark">{{ $collectionJobsCount }}</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="dp-card p-3 h-100" style="background-color: #EFF6FF; border-color: #BFDBFE;">
-            <div class="small fw-semibold text-primary">Final Delivery Jobs</div>
-            <div class="fs-4 fw-bold text-dark">{{ $finalDeliveryJobsCount }}</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="dp-card p-3 h-100" style="background-color: #FFFBEB; border-color: #FDE68A;">
-            <div class="small fw-semibold text-warning-emphasis">Pending Collections</div>
-            <div class="fs-4 fw-bold text-dark">{{ $pendingCollectionsCount }}</div>
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="dp-card p-3 h-100" style="background-color: #ECFDF5; border-color: #A7F3D0;">
-            <div class="small fw-semibold text-success">Completed Jobs</div>
-            <div class="fs-4 fw-bold text-dark">{{ $completedJobsCount }}</div>
-        </div>
-    </div>
-</div>
-
-<!-- Separate Custody vs Earnings Balances -->
-<div class="row g-2 g-md-3 mb-3">
-    <div class="col-12 col-sm-6 col-lg-3">
-        <div class="dp-card p-3 h-100" style="background-color: #FFF1F2; border-color: #FECACA;">
-            <div class="small fw-semibold text-danger">Cash in Hand (Business Custody)</div>
-            <div class="fs-4 fw-bold text-dark">{{ $currencyService->formatMinor($cashSummary['cash_in_hand_minor'], $currency) }}</div>
-            <div class="small text-muted" style="font-size: 0.72rem;">Customer cash awaiting admin handover</div>
-        </div>
-    </div>
-    <div class="col-12 col-sm-6 col-lg-3">
-        <div class="dp-card p-3 h-100" style="background-color: #F5F3FF; border-color: #DDD6FE;">
-            <div class="small fw-semibold" style="color: #6D28D9;">Online Transfers Awaiting Verification</div>
-            <div class="fs-4 fw-bold text-dark">{{ $currencyService->formatMinor($cashSummary['online_transfer_awaiting_verification_minor'], $currency) }}</div>
-            <div class="small text-muted" style="font-size: 0.72rem;">Pending admin confirmation</div>
-        </div>
-    </div>
-    <div class="col-12 col-sm-6 col-lg-3">
-        <div class="dp-card p-3 h-100" style="background-color: #FFF8E5; border-color: #FDE68A;">
-            <div class="small fw-semibold text-warning-emphasis">Pending Admin Settlement</div>
-            <div class="fs-4 fw-bold text-dark">{{ $currencyService->formatMinor($cashSummary['cash_in_hand_minor'], $currency) }}</div>
-            <div class="small text-muted" style="font-size: 0.72rem;">Total settled: {{ $currencyService->formatMinor($cashSummary['total_settled_minor'], $currency) }}</div>
-        </div>
-    </div>
-    <div class="col-12 col-sm-6 col-lg-3">
-        <div class="dp-card p-3 h-100" style="background-color: #ECFDF5; border-color: #A7F3D0;">
-            <div class="small fw-semibold text-success">Delivery Person Earnings Balance</div>
-            <div class="fs-4 fw-bold text-success">{{ $currencyService->formatMinor($earningsBalanceMinor, $currency) }}</div>
-            <div class="small text-muted" style="font-size: 0.72rem;">Personal earned delivery pay &amp; tips</div>
-        </div>
-    </div>
-</div>
-
-<!-- Store Pickup Requests -->
-<div class="dp-card p-3 mb-3" style="background-color: #FFF8E5; border-color: #FDE68A; border-left: 4px solid #FFC629;">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="fw-bold mb-0" style="color: #171717;"><i class="mdi mdi-package-variant-closed text-warning-emphasis me-1"></i>Store Pickup Requests</h6>
-        <span class="badge rounded-pill px-2 py-1" style="background-color: #FFC629; color: #171717;">{{ ($pendingPickupRequests ?? collect())->count() }} Pending</span>
-    </div>
-    @if(($pendingPickupRequests ?? collect())->isNotEmpty())
-        <div class="row g-2">
-            @foreach($pendingPickupRequests as $pr)
-                @php
-                    $prBooking = $pr->booking;
-                    $prStore = $pr->store;
-                    $prAsg = $pr->deliveryAssignment;
-                    $prAddr = is_array($prBooking?->address_snapshot) ? $prBooking->address_snapshot : [];
-                    $prExpectedMinor = (int) ($prAsg?->rate_minor ?? 0) + (int) ($prAsg?->tip_share_minor ?? 0);
-                @endphp
-                <div class="col-12 col-md-6">
-                    <div class="p-3 rounded-3 bg-white border h-100 d-flex flex-column justify-content-between" style="border-color: #E2E8F0;">
-                        <div>
-                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                                <div>
-                                    <span class="badge rounded-pill mb-1" style="background:#EFF6FF;color:#1D4ED8;">Final Delivery</span>
-                                    <div class="fw-bold" style="color:#171717;">{{ $prBooking?->reference ?? 'Booking' }}</div>
-                                </div>
-                                <span class="badge rounded-pill" style="background:#FEF3C7;color:#92400E;">{{ $pr->getStatusLabel() }}</span>
-                            </div>
-                            <div class="small mb-1"><strong>Store:</strong> {{ $prStore?->name ?? 'Assigned Store' }}</div>
-                            <div class="small text-muted mb-1"><strong>Store Address:</strong> {{ $prStore?->full_address ?: ($prStore?->address_line_1 ?: 'Not provided') }}</div>
-                            <div class="small text-muted mb-1"><strong>Store Phone:</strong> {{ $prStore?->phone ?: 'Not provided' }}</div>
-                            <div class="small mb-1"><strong>Customer Area / Postcode:</strong> {{ $prAddr['city'] ?? ($prAddr['area'] ?? 'Customer Address') }} {{ !empty($prAddr['postcode']) ? '(' . $prAddr['postcode'] . ')' : '' }}</div>
-                            <div class="small text-muted mb-2">
-                                <strong>Requested:</strong> {{ $pr->requested_at?->format('d M Y, H:i') }}
-                                @if($prExpectedMinor > 0)
-                                    &bull; <strong class="text-success">Expected Earning: {{ $currencyService->formatMinor($prExpectedMinor, $prAsg?->currency ?? $currency) }}</strong>
-                                @endif
-                            </div>
-                        </div>
-                        <div class="d-flex flex-wrap gap-2 pt-2 border-top">
-                            <form method="POST" action="{{ route('delivery-person.pickup-requests.accept', $pr) }}" class="d-inline">
-                                @csrf
-                                <button type="submit" class="btn btn-sm text-white fw-bold px-3" style="background-color:#16A34A;">Accept Request</button>
-                            </form>
-                            <button type="button" class="btn btn-sm btn-outline-danger fw-semibold px-3 dp-open-decline-btn"
-                                    data-action="{{ route('delivery-person.pickup-requests.decline', $pr) }}"
-                                    data-ref="{{ $prBooking?->reference ?? $pr->request_reference }}"
-                                    data-bs-toggle="modal" data-bs-target="#dpDeclinePickupModal">
-                                Decline Request
-                            </button>
-                            @if($prBooking)
-                                <a href="{{ route('delivery-person.bookings.show', $prBooking) }}" class="btn btn-sm btn-light border ms-auto">Details</a>
-                            @endif
-                        </div>
-                    </div>
+<!-- AJAX Month-wise Filter Bar -->
+<div class="dp-card p-3 mb-3 dp-dash-anim">
+    <form id="dpDashMonthForm" method="GET" action="{{ route('delivery-person.dashboard') }}" class="row g-2 align-items-center">
+        <div class="col-12 col-md-4 d-flex align-items-center gap-2">
+            <span class="dp-kpi-icon" style="background:#FFF8E5; color:#B45309;" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </span>
+            <div>
+                <div class="fw-bold small text-dark">Filter by Month</div>
+                <div class="text-muted" style="font-size:0.75rem;">
+                    Showing: <span class="fw-semibold text-dark" id="dpDashPeriodLabel">{{ $selectedMonthLabel ?? 'All Time' }}</span>
                 </div>
-            @endforeach
+            </div>
         </div>
-    @else
-        <div class="small text-muted bg-white rounded-3 p-3 border">No pending Store Pickup Requests at the moment.</div>
-    @endif
+        <div class="col-12 col-sm-6 col-md-4">
+            <input type="month" id="dpDashMonthInput" name="month" value="{{ ($selectedMonth ?? 'all') !== 'all' ? $selectedMonth : '' }}" class="form-control form-control-sm" aria-label="Select month">
+        </div>
+        <div class="col-12 col-sm-6 col-md-4 d-flex flex-wrap gap-2 justify-content-md-end">
+            <button type="submit" class="btn btn-sm dp-btn-yellow px-3 d-inline-flex align-items-center gap-1" id="dpDashApplyBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                <span>Apply</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-dark" id="dpDashThisMonthBtn" data-month="{{ now()->format('Y-m') }}">
+                This Month
+            </button>
+            <button type="button" class="btn btn-sm btn-light border" id="dpDashAllTimeBtn">
+                All Time
+            </button>
+        </div>
+    </form>
+</div>
+
+<div id="dpDashboardContentWrap">
+    @include('delivery-person-portal.partials.dashboard-content')
 </div>
 
 <!-- Modal: Decline Pickup Request -->
@@ -146,64 +113,80 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.dp-open-decline-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            document.getElementById('dpDeclinePickupForm').setAttribute('action', btn.getAttribute('data-action'));
-            document.getElementById('dpDeclineRefText').textContent = btn.getAttribute('data-ref') || '';
+    const dashboardUrl = @json(route('delivery-person.dashboard'));
+    const contentWrap = document.getElementById('dpDashboardContentWrap');
+    const monthForm = document.getElementById('dpDashMonthForm');
+    const monthInput = document.getElementById('dpDashMonthInput');
+    const periodLabel = document.getElementById('dpDashPeriodLabel');
+    const thisMonthBtn = document.getElementById('dpDashThisMonthBtn');
+    const allTimeBtn = document.getElementById('dpDashAllTimeBtn');
+
+    function bindDeclineButtons() {
+        document.querySelectorAll('.dp-open-decline-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                document.getElementById('dpDeclinePickupForm').setAttribute('action', btn.getAttribute('data-action'));
+                document.getElementById('dpDeclineRefText').textContent = btn.getAttribute('data-ref') || '';
+            });
         });
-    });
+    }
+
+    async function loadDashboardMonth(monthValue) {
+        if (!contentWrap) return;
+        contentWrap.classList.add('is-loading');
+        const param = monthValue || 'all';
+        const reqUrl = `${dashboardUrl}?month=${encodeURIComponent(param)}`;
+
+        try {
+            const res = await fetch(reqUrl, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            });
+            const data = await res.json();
+            if (res.ok && data.content_html !== undefined) {
+                contentWrap.innerHTML = data.content_html;
+                if (periodLabel && data.selected_month_label) {
+                    periodLabel.textContent = data.selected_month_label;
+                }
+                bindDeclineButtons();
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState({}, '', reqUrl);
+                }
+            }
+        } catch (err) {
+            window.location.href = reqUrl;
+        } finally {
+            contentWrap.classList.remove('is-loading');
+        }
+    }
+
+    if (monthForm) {
+        monthForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            loadDashboardMonth(monthInput?.value || 'all');
+        });
+    }
+    if (monthInput) {
+        monthInput.addEventListener('change', function () {
+            loadDashboardMonth(monthInput.value || 'all');
+        });
+    }
+    if (thisMonthBtn) {
+        thisMonthBtn.addEventListener('click', function () {
+            const m = thisMonthBtn.getAttribute('data-month') || '';
+            if (monthInput) monthInput.value = m;
+            loadDashboardMonth(m);
+        });
+    }
+    if (allTimeBtn) {
+        allTimeBtn.addEventListener('click', function () {
+            if (monthInput) monthInput.value = '';
+            loadDashboardMonth('all');
+        });
+    }
+
+    bindDeclineButtons();
 });
 </script>
-
-<div class="dp-card p-3">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="fw-bold mb-0">Recent Assigned Jobs</h6>
-        <a href="{{ route('delivery-person.bookings.index') }}" class="btn btn-sm btn-light">View All</a>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 small">
-            <thead class="table-light">
-                <tr>
-                    <th>Booking</th>
-                    <th>Role</th>
-                    <th>Customer</th>
-                    <th>Status</th>
-                    <th class="text-end">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($recentAssignments as $asg)
-                    @if($asg->booking)
-                        @php
-                            $jobStatus = $asg->getJobStatusDisplay();
-                            $jobUrl = $asg->isCollectionJob()
-                                ? route('delivery-person.collection-jobs.show', $asg)
-                                : route('delivery-person.final-delivery-jobs.show', $asg);
-                        @endphp
-                        <tr>
-                            <td>
-                                <div class="fw-bold">{{ $asg->booking->reference }}</div>
-                                <div class="small text-muted" style="font-size: 0.72rem;">{{ $asg->job_code }}</div>
-                            </td>
-                            <td>
-                                <span class="badge {{ $asg->isCollectionJob() ? 'bg-warning-subtle text-warning-emphasis' : 'bg-info-subtle text-info-emphasis' }}">
-                                    {{ $asg->type_label }}
-                                </span>
-                            </td>
-                            <td>{{ $asg->booking->customer_name }}</td>
-                            <td>
-                                <span class="badge rounded-pill px-2 py-1" style="{{ $jobStatus['badge_style'] }}">{{ $jobStatus['label'] }}</span>
-                            </td>
-                            <td class="text-end">
-                                <a href="{{ $jobUrl }}" class="btn btn-xs dp-btn-yellow px-2 py-1">Open Job</a>
-                            </td>
-                        </tr>
-                    @endif
-                @empty
-                    <tr><td colspan="5" class="text-center text-muted py-3">No active assignments yet.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-</div>
 @endsection

@@ -12,8 +12,8 @@
                 <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link {{ request()->routeIs('services.*') ? 'active' : '' }}">Services</a></li>
                 <li class="nav-item"><a href="{{ route('orders.index') }}" class="desktop-nav-link {{ request()->routeIs('orders.*') ? 'active' : '' }}">Orders</a></li>
                 {{-- <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link">Offers</a></li> --}}
-                <li class="nav-item"><a href="{{ url('/#about') }}" class="desktop-nav-link">About</a></li>
-                <li class="nav-item"><a href="{{ url('/#contact') }}" class="desktop-nav-link">Contact</a></li>
+                <li class="nav-item"><a href="{{ route('about') }}" class="desktop-nav-link {{ request()->routeIs('about') ? 'active' : '' }}">About Us</a></li>
+                <li class="nav-item"><a href="{{ route('contact') }}" class="desktop-nav-link {{ request()->routeIs('contact') ? 'active' : '' }}">Contact Us</a></li>
             </ul>
 
             <!-- User and Actions -->

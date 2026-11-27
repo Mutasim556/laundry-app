@@ -86,10 +86,74 @@
             border: 1px solid #E2E8F0;
             border-radius: 14px;
             box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-            transition: box-shadow 0.15s ease;
+            transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.26s ease, border-color 0.26s ease;
+            animation: fgOrdersFadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
         }
         .order-item-card:hover {
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+            transform: translateY(-3px);
+            border-color: #FCD34D;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        }
+        .orders-shell > .d-flex:first-child,
+        .orders-filter-card {
+            animation: fgOrdersFadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        .orders-stat-card {
+            animation: fgOrdersFadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+            transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.24s ease;
+        }
+        .orders-preset-pill {
+            transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .orders-preset-pill:hover {
+            transform: translateY(-1px);
+        }
+        .fg-orders-search-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .fg-orders-search-icon {
+            position: absolute;
+            left: 12px;
+            pointer-events: none;
+            color: #94A3B8;
+            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), color 0.25s ease;
+        }
+        .fg-orders-search-wrap .orders-filter-input {
+            padding-left: 36px;
+            transition: border-color 0.38s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.38s cubic-bezier(0.22, 1, 0.36, 1), transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+            animation: fgOrdersSearchPulse 4.8s ease-in-out infinite;
+        }
+        .fg-orders-search-wrap:focus-within .orders-filter-input {
+            border-color: #FFC629;
+            box-shadow: 0 8px 22px rgba(255, 198, 41, 0.24), 0 0 0 3px rgba(255, 198, 41, 0.16);
+            transform: translateY(-1px);
+            animation: none;
+        }
+        .fg-orders-search-wrap:focus-within .fg-orders-search-icon {
+            color: #D97706;
+            transform: scale(1.15) rotate(-8deg);
+        }
+        #filterSearch::placeholder {
+            color: #94A3B8;
+            opacity: 1;
+            transition: opacity 0.28s ease;
+        }
+        #filterSearch.is-ph-fading::placeholder {
+            opacity: 0;
+        }
+        @keyframes fgOrdersFadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fgOrdersSearchPulse {
+            0%, 100% { box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04); }
+            50% { box-shadow: 0 6px 18px rgba(255, 198, 41, 0.18); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .order-item-card, .orders-shell > .d-flex:first-child, .orders-filter-card, .orders-stat-card, .fg-orders-search-wrap .orders-filter-input { animation: none !important; }
+            .order-item-card, .orders-stat-card, .orders-preset-pill, .fg-orders-search-icon, .fg-orders-search-wrap .orders-filter-input { transition: none !important; }
         }
     </style>
 </head>
@@ -192,7 +256,13 @@
                     </div>
                     <div class="col-12 col-md-3">
                         <label for="filterSearch" class="form-label small fw-semibold mb-1" style="color: #475569;">Search</label>
-                        <input id="filterSearch" type="text" name="q" value="{{ $filters['q'] }}" class="form-control orders-filter-input" placeholder="Search by booking reference...">
+                        <div class="fg-orders-search-wrap">
+                            <svg class="fg-orders-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input id="filterSearch" type="text" name="q" value="{{ $filters['q'] }}" class="form-control orders-filter-input" placeholder="Search by booking reference...">
+                        </div>
                     </div>
                     <div class="col-12 col-md-2 d-flex gap-2">
                         <button type="submit" class="btn btn-dark btn-sm fw-semibold flex-grow-1" style="height: 40px; border-radius: 10px;">Apply</button>
@@ -299,5 +369,63 @@
     @include('shared.bottom-nav')
     @include('shared.offcanvas-nav')
     <script src="{{ asset('admin/dist/libs/bootstrap/dist/js/bootstrap.bundle.min.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const input = document.getElementById('filterSearch');
+            if (!input || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            const fullText = (input.getAttribute('placeholder') || '').trim();
+            const chars = Array.from(fullText);
+            if (chars.length <= 1) return;
+
+            let charIdx = 0;
+            let timer = null;
+            let isPaused = false;
+
+            function tick() {
+                if (isPaused || document.activeElement === input || input.value.trim() !== '') {
+                    return;
+                }
+                charIdx += 1;
+                if (charIdx <= chars.length) {
+                    input.classList.remove('is-ph-fading');
+                    input.setAttribute('placeholder', chars.slice(0, charIdx).join(''));
+                    const delay = charIdx === chars.length ? 1800 : 48;
+                    timer = setTimeout(tick, delay);
+                } else {
+                    input.classList.add('is-ph-fading');
+                    timer = setTimeout(() => {
+                        if (isPaused || document.activeElement === input || input.value.trim() !== '') return;
+                        charIdx = 1;
+                        input.setAttribute('placeholder', chars[0]);
+                        input.classList.remove('is-ph-fading');
+                        timer = setTimeout(tick, 48);
+                    }, 280);
+                }
+            }
+
+            input.addEventListener('focus', () => {
+                isPaused = true;
+                clearTimeout(timer);
+                input.classList.remove('is-ph-fading');
+                input.setAttribute('placeholder', fullText);
+            });
+
+            input.addEventListener('blur', () => {
+                if (input.value.trim() === '') {
+                    isPaused = false;
+                    charIdx = 0;
+                    clearTimeout(timer);
+                    timer = setTimeout(tick, 350);
+                }
+            });
+
+            if (input.value.trim() === '') {
+                input.setAttribute('placeholder', chars[0]);
+                charIdx = 1;
+                timer = setTimeout(tick, 120);
+            }
+        });
+    </script>
 </body>
 </html>

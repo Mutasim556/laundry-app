@@ -61,6 +61,88 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('settings', [\Modules\Admin\Http\Controllers\SettingController::class, 'index'])->name('settings.index');
             Route::match(['post', 'put', 'patch'], 'settings', [\Modules\Admin\Http\Controllers\SettingController::class, 'update'])->name('settings.update');
             Route::delete('settings/{key}', [\Modules\Admin\Http\Controllers\SettingController::class, 'destroy'])->name('settings.destroy');
+
+            // Website Manager -> Homepage Contents
+            Route::prefix('website-manager/homepage')->name('website-manager.homepage.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'index'])->name('index');
+                Route::post('sections', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'saveSections'])->name('sections.save');
+                Route::post('hero', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'saveHero'])->name('hero.save');
+                Route::post('search', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'saveSearch'])->name('search.save');
+                Route::post('categories', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'saveCategories'])->name('categories.save');
+                Route::post('promo-banner', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'savePromoBanner'])->name('promo-banner.save');
+                Route::post('services', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'saveServices'])->name('services.save');
+                Route::post('seo', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'saveSeo'])->name('seo.save');
+                Route::post('publish', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'publish'])->name('publish');
+                Route::post('versions/{version}/restore', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'restoreVersion'])->name('versions.restore');
+                Route::post('media', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'uploadMedia'])->name('media.upload');
+                Route::delete('media/{media}', [\Modules\Admin\App\Http\Controllers\HomepageContentController::class, 'deleteMedia'])->name('media.delete');
+            });
+
+            // Website Manager -> Services Page Contents
+            Route::prefix('website-manager/services')->name('website-manager.services.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'index'])->name('index');
+                Route::post('sections', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveSections'])->name('sections.save');
+                Route::post('banner', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveBanner'])->name('banner.save');
+                Route::post('search', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveSearch'])->name('search.save');
+                Route::post('categories', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveCategories'])->name('categories.save');
+                Route::post('catalog', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveCatalog'])->name('catalog.save');
+                Route::post('featured', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveFeatured'])->name('featured.save');
+                Route::post('cta', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveCta'])->name('cta.save');
+                Route::post('seo', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'saveSeo'])->name('seo.save');
+                Route::post('publish', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'publish'])->name('publish');
+                Route::post('versions/{version}/restore', [\Modules\Admin\App\Http\Controllers\ServicesPageContentController::class, 'restoreVersion'])->name('versions.restore');
+            });
+
+            // Website Manager -> About Page Contents
+            Route::prefix('website-manager/about')->name('website-manager.about.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'index'])->name('index');
+                Route::post('sections', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveSections'])->name('sections.save');
+                Route::post('hero', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveHero'])->name('hero.save');
+                Route::post('story', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveStory'])->name('story.save');
+                Route::post('mission-vision', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveMissionVision'])->name('mission-vision.save');
+                Route::post('benefits', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveBenefits'])->name('benefits.save');
+                Route::post('how-it-works', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveHowItWorks'])->name('how-it-works.save');
+                Route::post('stats', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveStats'])->name('stats.save');
+                Route::post('cta', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveCta'])->name('cta.save');
+                Route::post('seo', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'saveSeo'])->name('seo.save');
+                Route::post('publish', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'publish'])->name('publish');
+                Route::post('versions/{version}/restore', [\Modules\Admin\App\Http\Controllers\AboutPageContentController::class, 'restoreVersion'])->name('versions.restore');
+            });
+
+            // Website Manager -> Contact Page Contents
+            Route::prefix('website-manager/contact')->name('website-manager.contact.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'index'])->name('index');
+                Route::post('sections', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'saveSections'])->name('sections.save');
+                Route::post('hero', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'saveHero'])->name('hero.save');
+                Route::post('info', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'saveContactInfo'])->name('info.save');
+                Route::post('form-config', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'saveFormConfig'])->name('form.save');
+                Route::post('business-hours', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'saveBusinessHours'])->name('hours.save');
+                Route::post('map-social', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'saveMapSocial'])->name('map-social.save');
+                Route::post('seo', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'saveSeo'])->name('seo.save');
+                Route::post('publish', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'publish'])->name('publish');
+                Route::post('versions/{version}/restore', [\Modules\Admin\App\Http\Controllers\ContactPageContentController::class, 'restoreVersion'])->name('versions.restore');
+            });
+
+            // Website Manager -> Contact Enquiries
+            Route::prefix('website-manager/enquiries')->name('website-manager.enquiries.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\ContactEnquiryController::class, 'index'])->name('index');
+                Route::get('{enquiry}', [\Modules\Admin\App\Http\Controllers\ContactEnquiryController::class, 'show'])->name('show');
+                Route::post('{enquiry}/status', [\Modules\Admin\App\Http\Controllers\ContactEnquiryController::class, 'updateStatus'])->name('status');
+            });
+
+            // Website Manager -> Preloader Settings
+            Route::prefix('website-manager/preloader')->name('website-manager.preloader.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\PreloaderSettingController::class, 'index'])->name('index');
+                Route::post('save', [\Modules\Admin\App\Http\Controllers\PreloaderSettingController::class, 'saveDraft'])->name('save');
+                Route::post('publish', [\Modules\Admin\App\Http\Controllers\PreloaderSettingController::class, 'publish'])->name('publish');
+                Route::post('versions/{version}/restore', [\Modules\Admin\App\Http\Controllers\PreloaderSettingController::class, 'restoreVersion'])->name('versions.restore');
+            });
+
+            // Website Manager -> Customer Login OTP Settings
+            Route::prefix('website-manager/customer-login-otp')->name('website-manager.customer-login-otp.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\CustomerLoginOtpSettingController::class, 'index'])->name('index');
+                Route::post('save', [\Modules\Admin\App\Http\Controllers\CustomerLoginOtpSettingController::class, 'update'])->name('save');
+            });
         });
 
         // Services: Units & Categories Management

@@ -450,5 +450,93 @@
                 </a>
             </li>
         @endif
+
+        @php
+            $showHomepageContentsMenu = auth('admin')->user()->can('manage-settings', 'admin') && $adminMenuVisible('Website Manager', 'Homepage Contents');
+            $showServicesContentsMenu = auth('admin')->user()->can('manage-settings', 'admin') && $adminMenuVisible('Website Manager', 'Services Page Contents');
+            $showAboutContentsMenu = auth('admin')->user()->can('manage-settings', 'admin') && $adminMenuVisible('Website Manager', 'About Page Contents');
+            $showContactContentsMenu = auth('admin')->user()->can('manage-settings', 'admin') && $adminMenuVisible('Website Manager', 'Contact Page Contents');
+            $showEnquiriesMenu = auth('admin')->user()->can('manage-settings', 'admin') && $adminMenuVisible('Website Manager', 'Contact Enquiries');
+            $showPreloaderSettingsMenu = auth('admin')->user()->can('manage-settings', 'admin') && $adminMenuVisible('Website Manager', 'Preloader Settings');
+            $showCustomerLoginOtpMenu = auth('admin')->user()->can('manage-settings', 'admin') && $adminMenuVisible('Website Manager', 'Customer Login OTP Settings');
+            $showWebsiteManagerParent = $adminMenuVisible('Website Manager') && ($showHomepageContentsMenu || $showServicesContentsMenu || $showAboutContentsMenu || $showContactContentsMenu || $showEnquiriesMenu || $showPreloaderSettingsMenu || $showCustomerLoginOtpMenu);
+            $wmRouteActive = request()->routeIs('admin.website-manager.*');
+        @endphp
+        @if ($showWebsiteManagerParent)
+            <li class="sidebar-item {{ $wmRouteActive ? 'selected' : '' }}">
+                <a class="sidebar-link has-arrow waves-effect waves-dark {{ $wmRouteActive ? 'active' : '' }}"
+                    href="javascript:void(0)"
+                    aria-expanded="{{ $wmRouteActive ? 'true' : 'false' }}">
+                    <i data-feather="monitor" class="sidebar-icon" aria-hidden="true"></i>
+                    <span class="hide-menu">Website Manager</span>
+                </a>
+                <ul aria-expanded="{{ $wmRouteActive ? 'true' : 'false' }}"
+                    class="collapse first-level {{ $wmRouteActive ? 'in' : '' }}">
+                    @if ($showHomepageContentsMenu)
+                        <li class="sidebar-item {{ request()->routeIs('admin.website-manager.homepage.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.website-manager.homepage.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.website-manager.homepage.*') ? 'active' : '' }}">
+                                <i data-feather="layout" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">Homepage Contents</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if ($showServicesContentsMenu)
+                        <li class="sidebar-item {{ request()->routeIs('admin.website-manager.services.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.website-manager.services.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.website-manager.services.*') ? 'active' : '' }}">
+                                <i data-feather="layers" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">Services Page Contents</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if ($showAboutContentsMenu)
+                        <li class="sidebar-item {{ request()->routeIs('admin.website-manager.about.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.website-manager.about.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.website-manager.about.*') ? 'active' : '' }}">
+                                <i data-feather="info" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">About Page Contents</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if ($showContactContentsMenu)
+                        <li class="sidebar-item {{ request()->routeIs('admin.website-manager.contact.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.website-manager.contact.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.website-manager.contact.*') ? 'active' : '' }}">
+                                <i data-feather="phone" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">Contact Page Contents</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if ($showEnquiriesMenu)
+                        <li class="sidebar-item {{ request()->routeIs('admin.website-manager.enquiries.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.website-manager.enquiries.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.website-manager.enquiries.*') ? 'active' : '' }}">
+                                <i data-feather="mail" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">Contact Enquiries</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if ($showPreloaderSettingsMenu)
+                        <li class="sidebar-item {{ request()->routeIs('admin.website-manager.preloader.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.website-manager.preloader.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.website-manager.preloader.*') ? 'active' : '' }}">
+                                <i data-feather="loader" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">Preloader Settings</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if ($showCustomerLoginOtpMenu)
+                        <li class="sidebar-item {{ request()->routeIs('admin.website-manager.customer-login-otp.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.website-manager.customer-login-otp.index') }}"
+                                class="sidebar-link {{ request()->routeIs('admin.website-manager.customer-login-otp.*') ? 'active' : '' }}">
+                                <i data-feather="shield" class="sidebar-icon" aria-hidden="true"></i>
+                                <span class="hide-menu">Customer Login OTP Settings</span>
+                            </a>
+                        </li>
+                    @endif
+                </ul>
+            </li>
+        @endif
     </ul>
 </nav>
