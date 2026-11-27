@@ -24,6 +24,20 @@ Route::post('/contact/enquiry', [\App\Http\Controllers\PublicPageController::cla
     ->middleware('throttle:10,1')
     ->name('contact.enquiry.store');
 
+Route::get('/join-delivery-person', [\App\Http\Controllers\PublicDeliveryPersonRecruitmentController::class, 'index'])
+    ->name('join-delivery-person');
+Route::post('/join-delivery-person/apply', [\App\Http\Controllers\PublicDeliveryPersonRecruitmentController::class, 'store'])
+    ->middleware('throttle:10,1')
+    ->name('join-delivery-person.apply');
+Route::get('/delivery-person/application-status', [\App\Http\Controllers\PublicDeliveryPersonRecruitmentController::class, 'statusPage'])
+    ->name('delivery-person.application-status');
+Route::post('/delivery-person/application-status/lookup', [\App\Http\Controllers\PublicDeliveryPersonRecruitmentController::class, 'lookupStatus'])
+    ->middleware('throttle:20,1')
+    ->name('delivery-person.application-status.lookup');
+Route::post('/delivery-person/application-status/resubmit', [\App\Http\Controllers\PublicDeliveryPersonRecruitmentController::class, 'resubmitInfo'])
+    ->middleware('throttle:10,1')
+    ->name('delivery-person.application-status.resubmit');
+
 Route::get('/services', function (Request $request) {
     $filters = $request->validate([
         'category' => ['nullable', 'string', 'max:255'],

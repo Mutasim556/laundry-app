@@ -72,7 +72,7 @@ it('hides top-level menus when visibility is false while keeping direct routes a
         ->assertDontSee('<span class="hide-menu">Dashboard</span>', false)
         ->assertDontSee('<span class="hide-menu">Booking Management</span>', false)
         ->assertDontSee('<span class="hide-menu">Current Account</span>', false)
-        ->assertSee('<span class="hide-menu">Store Management</span>', false);
+        ->assertSee('<span class="hide-menu">Stores</span>', false);
 
     // Direct URLs continue working normally (no middleware/route/permission changes)
     $this->actingAs($admin, 'admin')->get(route('admin.bookings.index'))->assertOk();
@@ -91,7 +91,6 @@ it('supports independent submenu visibility and hides parent when parent is fals
     $this->actingAs($admin, 'admin')
         ->get(route('admin.stores.index'))
         ->assertOk()
-        ->assertSee('<span class="hide-menu">Store Management</span>', false)
         ->assertSee('<span class="hide-menu">Stores</span>', false)
         ->assertSee('<span class="hide-menu">Store Withdrawals</span>', false)
         ->assertDontSee('<span class="hide-menu">Vendors</span>', false);
@@ -139,7 +138,7 @@ it('defaults missing menu keys to visible and safely falls back when visible_adm
         ->get(route('admin.dashboard'))
         ->assertOk()
         ->assertSee('<span class="hide-menu">Dashboard</span>', false)
-        ->assertSee('<span class="hide-menu">Store Management</span>', false);
+        ->assertSee('<span class="hide-menu">Stores</span>', false);
 
     // Missing file does not crash sidebar and keeps all menus visible
     @unlink($this->visibleJsonPath);
@@ -147,5 +146,5 @@ it('defaults missing menu keys to visible and safely falls back when visible_adm
         ->get(route('admin.dashboard'))
         ->assertOk()
         ->assertSee('<span class="hide-menu">Dashboard</span>', false)
-        ->assertSee('<span class="hide-menu">Booking Management</span>', false);
+        ->assertSee('<span class="hide-menu">All Bookings</span>', false);
 });

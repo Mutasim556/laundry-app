@@ -65,4 +65,9 @@ class BookingStoreHandover extends Model
     {
         return $this->belongsTo(StoreUser::class, 'rejected_by_store_user_id');
     }
+
+    public function tagAssignments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LaundryTagBookingAssignment::class, 'handover_id')->with(['tag', 'verifiedByStoreUser'])->orderBy('id');
+    }
 }

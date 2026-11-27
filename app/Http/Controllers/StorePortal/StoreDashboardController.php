@@ -388,6 +388,8 @@ class StoreDashboardController extends Controller
             'currentFinalDeliveryAssignment.deliveryPerson',
             'latestStorePickupRequest.deliveryPerson',
             'storePickupRequests.deliveryPerson',
+            'activeTagAssignments.tag',
+            'activeTagAssignments.verifiedByStoreUser',
         ]);
 
         // Strict store ownership validation
@@ -801,6 +803,8 @@ class StoreDashboardController extends Controller
         $query = BookingStoreHandover::query()
             ->with([
                 'booking.operationalItems',
+                'booking.activeTagAssignments.tag',
+                'booking.activeTagAssignments.verifiedByStoreUser',
                 'collectionDeliveryPerson',
                 'acceptedByStoreUser',
                 'rejectedByStoreUser',
@@ -901,6 +905,43 @@ class StoreDashboardController extends Controller
                 'status' => $accepted->status,
                 'accepted_at' => $accepted->accepted_at?->format('d M Y, H:i'),
                 'accepted_by' => $accepted->acceptedByStoreUser?->name,
+            ])
+            : back()->with('success', $msg);
+    }
+
+    public function verifyBookingTag(Request $request, Booking $booking): RedirectResponse|JsonResponse
+    {
+        $storeUser = $this->storeUser();
+
+        $validated = $request->validate([
+            'tag_code' => ['required', 'string', 'max:120'],
+            'method' => ['nullable', 'in:manual,qr'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $verified = app(\App\Services\BookingTagAssignmentService::class)->verifyTagForStoreHandover(
+                $booking,
+                $storeUser,
+                $validated['tag_code'],
+                $validated['method'] ?? null,
+                $validated['notes'] ?? null
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $msg = collect($e->errors())->flatten()->first() ?: 'Tag verification failed.';
+            return $request->expectsJson()
+                ? response()->json(['success' => false, 'message' => $msg, 'errors' => $e->errors()], 422)
+                : back()->withErrors($e->errors());
+        }
+
+        $booking->load(['activeTagAssignments.tag', 'activeTagAssignments.verifiedByStoreUser']);
+        $msg = "Tag {$verified->tag->tag_code} verified at store by {$storeUser->name}. Click Accept & Confirm Received to finish handover receipt.";
+
+        return $request->expectsJson()
+            ? response()->json([
+                'success' => true,
+                'message' => $msg,
+                'tags_html' => view('store-portal.bookings.partials.tag-verification-list', compact('booking'))->render(),
             ])
             : back()->with('success', $msg);
     }

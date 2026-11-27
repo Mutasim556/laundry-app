@@ -14,6 +14,13 @@
                 {{-- <li class="nav-item"><a href="{{ route('services.index') }}" class="desktop-nav-link">Offers</a></li> --}}
                 <li class="nav-item"><a href="{{ route('about') }}" class="desktop-nav-link {{ request()->routeIs('about') ? 'active' : '' }}">About Us</a></li>
                 <li class="nav-item"><a href="{{ route('contact') }}" class="desktop-nav-link {{ request()->routeIs('contact') ? 'active' : '' }}">Contact Us</a></li>
+                <li class="nav-item">
+                    <a href="{{ route('join-delivery-person') }}"
+                       class="btn btn-sm rounded-pill px-3 py-1 fw-bold {{ request()->routeIs('join-delivery-person*') ? 'btn-dark text-white' : 'text-dark' }}"
+                       style="{{ request()->routeIs('join-delivery-person*') ? '' : 'background-color: #FFC629;' }}">
+                        Join as a Delivery Person
+                    </a>
+                </li>
             </ul>
 
             <!-- User and Actions -->

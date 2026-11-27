@@ -99,6 +99,35 @@ class DeliveryPerson extends Authenticatable implements CanResetPasswordContract
             && ! empty($this->password);
     }
 
+    public function application(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\DeliveryPersonApplication::class, 'approved_delivery_person_id');
+    }
+
+    public function isEligibleForAssignment(): bool
+    {
+        if ($this->work_status !== 'active' || $this->trashed()) {
+            return false;
+        }
+
+        $app = $this->application()->first();
+        if ($app !== null && $app->status !== \App\Models\DeliveryPersonApplication::STATUS_APPROVED) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function scopeEligibleForAssignment($query)
+    {
+        return $query->where('work_status', 'active')
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->whereDoesntHave('application')
+                    ->orWhereHas('application', fn ($aq) => $aq->where('status', \App\Models\DeliveryPersonApplication::STATUS_APPROVED));
+            });
+    }
+
     public static function normalizePhone(?string $rawPhone, ?string $countryCode = null): ?string
     {
         return StoreUser::normalizePhone($rawPhone, $countryCode);
@@ -149,6 +178,16 @@ class DeliveryPerson extends Authenticatable implements CanResetPasswordContract
         return $this->hasMany(DeliveryPersonWithdrawalRequest::class)->orderByDesc('requested_at');
     }
 
+    public function allocatedLaundryTags(): HasMany
+    {
+        return $this->hasMany(\App\Models\LaundryTag::class, 'current_delivery_person_id')->orderByDesc('allocated_at')->orderByDesc('id');
+    }
+
+    public function tagAllocations(): HasMany
+    {
+        return $this->hasMany(\App\Models\LaundryTagAllocation::class, 'delivery_person_id')->orderByDesc('allocated_at')->orderByDesc('id');
+    }
+
     public function getInitialsAttribute(): string
     {
         $parts = preg_split('/\s+/', trim((string) $this->full_name)) ?: [];
@@ -161,10 +200,5 @@ class DeliveryPerson extends Authenticatable implements CanResetPasswordContract
     public function getPhoneDisplayAttribute(): string
     {
         return trim(($this->phone_country_code ? $this->phone_country_code . ' ' : '') . $this->phone);
-    }
-
-    public function isEligibleForAssignment(): bool
-    {
-        return $this->work_status === 'active' && ! $this->trashed();
     }
 }

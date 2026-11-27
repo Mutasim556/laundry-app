@@ -72,6 +72,13 @@ Route::middleware(['auth:delivery_person', 'delivery_person.active'])->group(fun
     Route::post('withdrawals', [DeliveryPersonWithdrawalController::class, 'store'])->name('withdrawals.store');
     Route::get('withdrawals/{withdrawal}', [DeliveryPersonWithdrawalController::class, 'show'])->name('withdrawals.show');
 
+    Route::post('bookings/{booking}/store-handover', [DeliveryPersonBookingController::class, 'requestStoreHandover'])->name('bookings.store-handover');
+    Route::post('bookings/{booking}/tags', [\App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonTagController::class, 'assignToBooking'])->name('bookings.tags.assign');
+    Route::delete('bookings/{booking}/tags/{tag}', [\App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonTagController::class, 'unassignFromBooking'])->name('bookings.tags.unassign');
+
+    Route::get('tags', [\App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonTagController::class, 'index'])->name('tags.index');
+    Route::post('tags/{tag}/exception', [\App\Http\Controllers\DeliveryPersonPortal\DeliveryPersonTagController::class, 'reportException'])->name('tags.exception');
+
     Route::get('profile', [DeliveryPersonDashboardController::class, 'profile'])->name('profile');
     Route::post('profile', [DeliveryPersonDashboardController::class, 'updateProfile'])->name('profile.update');
     Route::post('change-password', [DeliveryPersonAuthController::class, 'updatePassword'])->name('password.update');

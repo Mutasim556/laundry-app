@@ -16,6 +16,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
     // Authenticated Admin Routes
     Route::middleware(['auth:admin', 'not_blocked:admin'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('dashboard/overview', [DashboardController::class, 'overview'])->name('dashboard.overview');
+        Route::get('dashboard/operations', [DashboardController::class, 'operations'])->name('dashboard.operations');
+        Route::get('dashboard/finance', [DashboardController::class, 'finance'])->name('dashboard.finance');
+        Route::get('dashboard/tags', [DashboardController::class, 'tags'])->name('dashboard.tags');
+        Route::get('dashboard/activity', [DashboardController::class, 'activity'])->name('dashboard.activity');
         Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
 
         // Admin Profile Routes
@@ -143,6 +148,25 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/', [\Modules\Admin\App\Http\Controllers\CustomerLoginOtpSettingController::class, 'index'])->name('index');
                 Route::post('save', [\Modules\Admin\App\Http\Controllers\CustomerLoginOtpSettingController::class, 'update'])->name('save');
             });
+
+            // Website Manager -> Delivery Person Join Page
+            Route::prefix('website-manager/delivery-person-join')->name('website-manager.delivery-person-join.')->group(function () {
+                Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'index'])->name('index');
+                Route::post('/general', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveGeneral'])->name('general.save');
+                Route::post('/sections', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveSections'])->name('sections.save');
+                Route::post('/hero', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveHero'])->name('hero.save');
+                Route::post('/benefits', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveBenefits'])->name('benefits.save');
+                Route::post('/how-it-works', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveHowItWorks'])->name('how-it-works.save');
+                Route::post('/requirements', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveRequirements'])->name('requirements.save');
+                Route::post('/form-config', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveFormConfig'])->name('form-config.save');
+                Route::post('/documents', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveDocuments'])->name('documents.save');
+                Route::post('/faqs', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveFaqs'])->name('faqs.save');
+                Route::post('/cta', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveCta'])->name('cta.save');
+                Route::post('/seo', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveSeo'])->name('seo.save');
+                Route::post('/demo', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'saveDemo'])->name('demo.save');
+                Route::post('/publish', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'publish'])->name('publish');
+                Route::post('/versions/{version}/restore', [\Modules\Admin\App\Http\Controllers\DeliveryPersonJoinPageController::class, 'restoreVersion'])->name('versions.restore');
+            });
         });
 
         // Services: Units & Categories Management
@@ -248,6 +272,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // Delivery Persons Management
+        Route::prefix('delivery-person-applications')->name('delivery-person-applications.')->middleware('permission:view-delivery-persons,admin')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'index'])->name('index');
+            Route::get('/{application}', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'show'])->name('show');
+            Route::post('/{application}/begin-review', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'beginReview'])->name('begin-review');
+            Route::post('/{application}/request-info', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'requestInfo'])->name('request-info');
+            Route::post('/{application}/approve', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'approve'])->name('approve');
+            Route::post('/{application}/reject', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'reject'])->name('reject');
+            Route::get('/{application}/documents/{document}/preview', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'previewDocument'])->name('documents.preview');
+            Route::get('/{application}/documents/{document}', [\Modules\Admin\App\Http\Controllers\DeliveryPersonApplicationController::class, 'downloadDocument'])->name('documents.download');
+        });
+
         Route::prefix('delivery-persons')->name('delivery-persons.')->group(function () {
             Route::get('/', [\Modules\Admin\App\Http\Controllers\DeliveryPersonController::class, 'index'])
                 ->middleware('permission:view-delivery-persons,admin')->name('index');
@@ -623,6 +658,65 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/execute', [\Modules\Admin\App\Http\Controllers\DatabaseCleanupController::class, 'execute'])
                 ->middleware(['permission:manage-database-cleanup,admin', 'throttle:5,1'])
                 ->name('execute');
+        });
+
+        // Laundry Tag Management (QR Tag Generation, Printing, Allocation & Audit History)
+        Route::prefix('tags')->name('tags.')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'index'])
+                ->middleware('permission:view-laundry-tags|manage-laundry-tags,admin')
+                ->name('index');
+            Route::get('/history', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'history'])
+                ->middleware('permission:view-laundry-tags|manage-laundry-tags,admin')
+                ->name('history');
+
+            Route::middleware('permission:manage-laundry-tags,admin')->group(function () {
+                Route::get('/generate', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'generateForm'])
+                    ->name('generate');
+                Route::post('/generate', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'generateStore'])
+                    ->name('generate.store');
+                Route::get('/print-preview', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'printPreview'])
+                    ->name('print-preview');
+                Route::get('/print-pdf', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'downloadPdf'])
+                    ->name('print-pdf');
+                Route::post('/print-jobs/{printJob}/confirm', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'confirmPrintJob'])
+                    ->name('print-jobs.confirm');
+
+                Route::get('/allocations', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'allocations'])
+                    ->name('allocations.index');
+                Route::post('/allocations', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'storeAllocation'])
+                    ->name('allocations.store');
+
+                Route::get('/printer-settings', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'printerSettings'])
+                    ->name('printer-settings.index');
+                Route::post('/printer-settings', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'savePrinterSettings'])
+                    ->name('printer-settings.store');
+                Route::put('/printer-settings/{profile}', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'savePrinterSettings'])
+                    ->name('printer-settings.update');
+
+                Route::post('/{tag}/exception', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'reportException'])
+                    ->name('exception');
+                Route::post('/{tag}/return-to-stock', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'returnToStock'])
+                    ->name('return-to-stock');
+            });
+
+            Route::get('/{tag}', [\Modules\Admin\App\Http\Controllers\LaundryTagController::class, 'show'])
+                ->middleware('permission:view-laundry-tags|manage-laundry-tags,admin')
+                ->name('show');
+        });
+
+        // Reports & Analytics (18-Report Center)
+        Route::prefix('reports')->name('reports.')->middleware('permission:view-reports,admin')->group(function () {
+            Route::get('/', [\Modules\Admin\App\Http\Controllers\AdminReportController::class, 'index'])->name('index');
+            Route::get('/transactions', [\Modules\Admin\App\Http\Controllers\AdminReportController::class, 'transactions'])->name('transactions');
+            Route::get('/stores', [\Modules\Admin\App\Http\Controllers\AdminReportController::class, 'stores'])->name('stores');
+            Route::get('/delivery-persons', [\Modules\Admin\App\Http\Controllers\AdminReportController::class, 'deliveryPersons'])->name('delivery-persons');
+            Route::get('/problems', [\Modules\Admin\App\Http\Controllers\AdminReportController::class, 'problems'])->name('problems');
+            Route::get('/export', [\Modules\Admin\App\Http\Controllers\AdminReportController::class, 'exportCsv'])
+                ->middleware('permission:export-reports,admin')
+                ->name('export');
+            Route::get('/{reportType}', [\Modules\Admin\App\Http\Controllers\AdminReportController::class, 'showReport'])
+                ->where('reportType', 'overview|website|customers|bookings|bottlenecks|tags|profitability|earnings|withdrawals|cash-custody|stores-financials|delivery-persons-earnings|delivery-comparison|activity')
+                ->name('show');
         });
     });
 });

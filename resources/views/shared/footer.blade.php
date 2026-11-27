@@ -39,6 +39,7 @@
                     <li><a href="{{ route('contact') }}" class="footer-link">Contact Us</a></li>
                     <li><a href="{{ route('services.index') }}" class="footer-link">Pricing &amp; Catalog</a></li>
                     <li><a href="{{ route('booking.services') }}" class="footer-link">Book a Collection</a></li>
+                    <li><a href="{{ route('join-delivery-person') }}" class="footer-link">Join as a Delivery Person</a></li>
                     <li><a href="{{ route('admin.login') }}" class="footer-link">Admin Portal</a></li>
                 </ul>
             </div>

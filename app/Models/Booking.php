@@ -396,6 +396,19 @@ class Booking extends Model
         return $this->hasOne(BookingStorePickupRequest::class)->latest('id');
     }
 
+    public function tagAssignments(): HasMany
+    {
+        return $this->hasMany(LaundryTagBookingAssignment::class)->orderBy('id');
+    }
+
+    public function activeTagAssignments(): HasMany
+    {
+        return $this->hasMany(LaundryTagBookingAssignment::class)
+            ->where('active_lock', 1)
+            ->with(['tag', 'verifiedByStoreUser', 'assignedByDeliveryPerson'])
+            ->orderBy('id');
+    }
+
     public function policyVersion(): BelongsTo
     {
         return $this->belongsTo(RefundReturnPolicyVersion::class, 'policy_version_id');

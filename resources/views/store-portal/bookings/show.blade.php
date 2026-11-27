@@ -54,6 +54,13 @@
     </div>
 @endif
 
+<!-- Laundry Tags Verification Card -->
+<div class="sp-card p-3 mb-3" style="background: #F8FAFC; border-color: #CBD5E1;">
+    <div id="spBookingTagsContainer">
+        @include('store-portal.bookings.partials.tag-verification-list', ['booking' => $booking])
+    </div>
+</div>
+
 <!-- 2. Services & Items (Operational Details) -->
 @php
     $spPricingComplete = $isFinanciallyVisible
@@ -294,7 +301,19 @@
                 @endif
             </p>
             <div id="spMarkCompleteActionWrap">
-                @if($spCanMarkComplete)
+                @if($booking->activeTagAssignments->isNotEmpty() && ! $spStoreCompleteDone)
+                    @php
+                        $spTagTotal = $booking->activeTagAssignments->count();
+                        $spTagDone = $booking->activeTagAssignments->filter->isStoreProcessingCompleted()->count();
+                    @endphp
+                    <div class="p-2 px-3 rounded-3 small mb-2" style="background: #FFF8E5; border: 1px solid #FDE68A; color: #92400E;">
+                        Complete all assigned laundry tags to finish Store Processing (<strong>{{ $spTagDone }} / {{ $spTagTotal }}</strong> completed).
+                    </div>
+                    <a href="{{ route('store.tag-verification.index', ['tag_code' => $booking->activeTagAssignments->first()?->tag?->tag_code]) }}"
+                       class="btn btn-sm btn-warning fw-bold px-3 py-2" style="border-radius: 10px;">
+                        <i class="mdi mdi-qrcode-scan me-1"></i>Open QR Tag Verification
+                    </a>
+                @elseif($spCanMarkComplete)
                     <button type="button" class="btn btn-sm fw-bold text-white px-3 py-2" style="background-color: #16A34A; border-radius: 10px;" data-bs-toggle="modal" data-bs-target="#confirmStoreCompleteModal" id="spMarkCompleteBtn">
                         <i class="mdi mdi-check-circle-outline me-1"></i>Mark Store Complete
                     </button>
@@ -528,6 +547,52 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    document.addEventListener('click', async function (e) {
+        const openBtn = e.target.closest('.js-open-store-verify-tag');
+        if (openBtn) {
+            window.FreshGoTagScanner.open({
+                context: 'store',
+                title: 'Verify Laundry Tag — ' + (openBtn.dataset.ref || ''),
+                submitLabel: 'Verify Tag at Store',
+                actionUrl: openBtn.dataset.url,
+                onSuccess: function (data) {
+                    if (data.tags_html) {
+                        document.getElementById('spBookingTagsContainer').innerHTML = data.tags_html;
+                    }
+                }
+            });
+            return;
+        }
+
+        const quickBtn = e.target.closest('.js-store-quick-verify');
+        if (quickBtn) {
+            quickBtn.disabled = true;
+            try {
+                const res = await fetch(quickBtn.dataset.url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                    },
+                    body: JSON.stringify({ tag_code: quickBtn.dataset.code, method: 'manual' }),
+                });
+                const data = await res.json();
+                if (res.ok && data.success && data.tags_html) {
+                    document.getElementById('spBookingTagsContainer').innerHTML = data.tags_html;
+                } else {
+                    alert(data.message || 'Verification failed.');
+                    quickBtn.disabled = false;
+                }
+            } catch (err) {
+                alert('Network error verifying tag.');
+                quickBtn.disabled = false;
+            }
+        }
+    });
 });
 </script>
+@include('partials.laundry-tag-scanner-modal')
+@include('partials.laundry-tag-scanner-script')
 @endsection

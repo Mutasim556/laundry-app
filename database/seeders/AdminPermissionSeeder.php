@@ -125,6 +125,10 @@ class AdminPermissionSeeder extends Seeder
                 'export-reports',
                 'manage-settings',
             ],
+            'Laundry Tag Management' => [
+                'view-laundry-tags',
+                'manage-laundry-tags',
+            ],
         ];
 
         foreach ($groups as $groupName => $permissions) {

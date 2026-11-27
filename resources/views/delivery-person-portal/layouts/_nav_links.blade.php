@@ -5,7 +5,8 @@
         'delivery-person.collections.*',
         'delivery-person.collection-jobs.*',
         'delivery-person.final-deliveries.*',
-        'delivery-person.final-delivery-jobs.*'
+        'delivery-person.final-delivery-jobs.*',
+        'delivery-person.tags.*'
     );
     $finActive = request()->routeIs(
         'delivery-person.earnings*',
@@ -67,6 +68,14 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h1"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
                 </span>
                 <span class="dp-nav-label">Final Deliveries</span>
+            </a>
+            <a href="{{ route('delivery-person.tags.index') }}"
+               class="dp-nav-link dp-sub-link {{ request()->routeIs('delivery-person.tags.*') ? 'active' : '' }}"
+               title="My Tags">
+                <span class="dp-nav-ico" style="color: #16A34A;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3z"/><path d="M18 18h3v3h-3z"/></svg>
+                </span>
+                <span class="dp-nav-label">My Tags</span>
             </a>
         </div>
     </div>

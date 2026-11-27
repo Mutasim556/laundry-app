@@ -257,7 +257,23 @@
             document.getElementById('storeRejectHandoverForm').setAttribute('action', rejectBtn.dataset.action);
             document.getElementById('rejectModalRef').textContent = rejectBtn.dataset.ref || '';
             bootstrap.Modal.getOrCreateInstance(document.getElementById('storeRejectHandoverModal')).show();
+            return;
+        }
+
+        const verifyTagBtn = e.target.closest('.js-store-ho-verify-tag');
+        if (verifyTagBtn) {
+            window.FreshGoTagScanner.open({
+                context: 'store',
+                title: 'Verify Laundry Tag — ' + (verifyTagBtn.dataset.ref || ''),
+                submitLabel: 'Verify Tag at Store',
+                actionUrl: verifyTagBtn.dataset.url,
+                onSuccess: function () {
+                    window.location.reload();
+                }
+            });
         }
     });
 </script>
+@include('partials.laundry-tag-scanner-modal')
+@include('partials.laundry-tag-scanner-script')
 @endpush

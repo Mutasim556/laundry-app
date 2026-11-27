@@ -104,6 +104,13 @@
                     <span>Contact Us</span><span>&rarr;</span>
                 </a>
             </li>
+            <li>
+                <a href="{{ route('join-delivery-person') }}"
+                   class="d-flex align-items-center justify-content-between p-3 rounded-3 text-decoration-none fw-bold {{ request()->routeIs('join-delivery-person*') ? 'text-white' : 'text-dark' }}"
+                   style="{{ request()->routeIs('join-delivery-person*') ? 'background-color: #171717;' : 'background-color: #FFF8E5; border: 1px solid #FFC629;' }}">
+                    <span>Join as a Delivery Person</span><span>&rarr;</span>
+                </a>
+            </li>
             @auth('web')
                 <li class="pt-2 border-top mt-1">
                     <a href="{{ route('account.profile') }}"

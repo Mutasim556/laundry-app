@@ -43,7 +43,9 @@
     </a>
 
     <!-- Profile -->
-    <a href="{{ route('admin.login') }}" class="nav-tab-item" aria-label="Profile">
+    <a href="{{ auth('web')->check() ? route('account.profile') : route('login') }}"
+       class="nav-tab-item {{ request()->routeIs('account.*') || request()->routeIs('login') ? 'active' : '' }}"
+       aria-label="Profile">
         <svg viewBox="0 0 24 24">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>

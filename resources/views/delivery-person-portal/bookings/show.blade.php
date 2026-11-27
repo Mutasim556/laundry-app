@@ -419,6 +419,36 @@
     @endphp
 
     @if($ctx['is_collection_assignee'] && $isPickedUpDone)
+        @php
+            $canModifyBookingTags = ($hStatus !== 'accepted' && ! $isStoreReceivedDone);
+        @endphp
+        <!-- LAUNDRY TAGS Section (Customer-to-Store Physical Packaging Tags) -->
+        <div class="col-12" id="dpLaundryTagsSection">
+            <div class="dp-card p-3 p-md-4" style="border-color: #FDE68A; background-color: #FFFFFF;">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="d-inline-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+                              style="width: 34px; height: 34px; background-color: #FFF8E5; color: #171717; border: 1px solid #FDE68A;">
+                            <i class="mdi mdi-qrcode"></i>
+                        </span>
+                        <div>
+                            <h6 class="fw-bold mb-0 text-dark">LAUNDRY TAGS</h6>
+                            <div class="small text-muted" style="font-size: 0.78rem;">Attach one or more allocated Fresh Go QR tags before Store handover.</div>
+                        </div>
+                    </div>
+                    @if($canModifyBookingTags)
+                        <button type="button" id="btnOpenDpAssignTagModal" class="btn btn-sm btn-warning fw-semibold"
+                                data-url="{{ route('delivery-person.bookings.tags.assign', $booking) }}">
+                            <i class="mdi mdi-qrcode-scan me-1"></i>Assign Laundry Tag
+                        </button>
+                    @endif
+                </div>
+                <div id="dpAssignedTagsContainer">
+                    @include('delivery-person-portal.bookings.partials.assigned-tags-list', ['booking' => $booking, 'canEditTags' => $canModifyBookingTags])
+                </div>
+            </div>
+        </div>
+
         <!-- Store Handover Section (Appears ONLY after Delivery Person Picked Up Done) -->
         <div class="col-12" id="dpStoreHandoverSection">
             <div class="dp-card p-3 p-md-4" style="border-color: #BFDBFE; background-color: #FFFFFF;">
@@ -584,6 +614,41 @@
             }
         });
     });
+
+    $(document).on('click', '#btnOpenDpAssignTagModal', function () {
+        window.FreshGoTagScanner.open({
+            context: 'dp',
+            title: 'Assign Physical Laundry Tag ({{ $booking->reference }})',
+            submitLabel: 'Verify & Attach Tag',
+            actionUrl: $(this).data('url'),
+            onSuccess: function (data) {
+                if (data.tags_html) {
+                    $('#dpAssignedTagsContainer').html(data.tags_html);
+                }
+            }
+        });
+    });
+
+    $(document).on('click', '.js-dp-unassign-tag', function () {
+        const $btn = $(this);
+        if (!confirm(`Remove tag ${$btn.data('code')} from this booking?`)) return;
+        $.ajax({
+            url: $btn.data('url'),
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json' },
+            data: { _token: $('meta[name="csrf-token"]').attr('content') },
+            success: function (res) {
+                if (res.tags_html) {
+                    $('#dpAssignedTagsContainer').html(res.tags_html);
+                }
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON?.message || 'Unable to remove tag.');
+            }
+        });
+    });
     @endif
 </script>
+@include('partials.laundry-tag-scanner-modal')
+@include('partials.laundry-tag-scanner-script')
 @endpush

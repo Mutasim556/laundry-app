@@ -65,6 +65,19 @@ class StorePickupDeliveryService
                 ]);
             }
 
+            $activeTags = \App\Models\LaundryTagBookingAssignment::where('booking_id', $locked->id)
+                ->where('active_lock', 1)
+                ->lockForUpdate()
+                ->get();
+            if ($activeTags->isNotEmpty()) {
+                $incompleteCount = $activeTags->filter(fn ($t) => $t->store_processing_completed_at === null)->count();
+                if ($incompleteCount > 0) {
+                    throw ValidationException::withMessages([
+                        'tags' => ["Complete all {$activeTags->count()} laundry tags before marking this booking Store Complete ({$incompleteCount} remaining)."],
+                    ]);
+                }
+            }
+
             $nowIso = now()->toIso8601String();
             $stages = is_array($locked->completed_operational_stages) ? $locked->completed_operational_stages : [];
 
@@ -498,6 +511,8 @@ class StorePickupDeliveryService
             $lockedBooking->version = ((int) $lockedBooking->version) + 1;
             $lockedBooking->save();
 
+            app(BookingTagAssignmentService::class)->syncTagsOnFinalDeliveryCollected($lockedBooking, $person);
+
             BookingAuditLog::create([
                 'booking_id' => $lockedBooking->id,
                 'actor_type' => 'delivery_person',
@@ -612,6 +627,8 @@ class StorePickupDeliveryService
             $lockedBooking->booking_status = Booking::STATUS_COMPLETED;
             $lockedBooking->version = ((int) $lockedBooking->version) + 1;
             $lockedBooking->save();
+
+            app(BookingTagAssignmentService::class)->retireTagsOnBookingCompleted($lockedBooking, $person);
 
             // Idempotently settle booking & credit Final Delivery Person earnings ledger once
             $this->settlementService->settleCompletedBooking($lockedBooking, null);

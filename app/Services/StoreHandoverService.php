@@ -81,19 +81,23 @@ class StoreHandoverService
                 'idempotency_key' => $key,
             ]);
 
+            $attachedTagCodes = app(BookingTagAssignmentService::class)->attachActiveTagsToHandoverRequest($locked, $handover, $person);
+
             BookingAuditLog::create([
                 'booking_id' => $locked->id,
                 'actor_type' => 'delivery_person',
                 'actor_id' => $person->id,
                 'actor_name' => $person->full_name,
                 'action' => 'store_handover_requested',
-                'summary' => "Store handover requested ({$handover->request_reference}) to {$store->name} by Delivery Person {$person->full_name}.",
+                'summary' => "Store handover requested ({$handover->request_reference}) to {$store->name} by Delivery Person {$person->full_name}."
+                    . (! empty($attachedTagCodes) ? ' Tags: ' . implode(', ', $attachedTagCodes) . '.' : ''),
                 'changes' => [
                     'handover_id' => $handover->id,
                     'request_reference' => $handover->request_reference,
                     'store_id' => $store->id,
                     'store_name' => $store->name,
                     'delivery_person_id' => $person->id,
+                    'laundry_tag_codes' => $attachedTagCodes,
                 ],
             ]);
 
@@ -148,6 +152,8 @@ class StoreHandoverService
                 'accepted_at' => $now,
                 'accepted_by_store_user_id' => $storeUser->id,
             ]);
+
+            app(BookingTagAssignmentService::class)->syncTagsOnHandoverAccepted($lockedBooking, $lockedHandover, $storeUser);
 
             $stages = is_array($lockedBooking->completed_operational_stages) ? $lockedBooking->completed_operational_stages : [];
             $stages[Booking::STATUS_STORE_RECEIVED] = [

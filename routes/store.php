@@ -28,6 +28,12 @@ Route::middleware(['auth:store', 'store.active'])->group(function () {
     Route::get('/handovers', [StoreDashboardController::class, 'handovers'])->name('handovers.index');
     Route::post('/handovers/{handover}/accept', [StoreDashboardController::class, 'acceptHandover'])->name('handovers.accept');
     Route::post('/handovers/{handover}/reject', [StoreDashboardController::class, 'rejectHandover'])->name('handovers.reject');
+    Route::post('/bookings/{booking}/verify-tag', [StoreDashboardController::class, 'verifyBookingTag'])->name('bookings.verify-tag');
+
+    // Store QR Tag Verification & Per-Tag Bag Completion
+    Route::get('/tag-verification', [\App\Http\Controllers\StorePortal\StoreTagVerificationController::class, 'index'])->name('tag-verification.index');
+    Route::post('/tag-verification/verify', [\App\Http\Controllers\StorePortal\StoreTagVerificationController::class, 'verify'])->name('tag-verification.verify');
+    Route::post('/tag-verification/assignments/{assignment}/complete', [\App\Http\Controllers\StorePortal\StoreTagVerificationController::class, 'completeTag'])->name('tag-verification.complete');
     Route::get('/earnings', [StoreDashboardController::class, 'earnings'])->name('earnings.index');
     Route::get('/account', [StoreDashboardController::class, 'account'])->name('account.index');
     Route::get('/reports', [StoreReportsController::class, 'index'])->name('reports.index');

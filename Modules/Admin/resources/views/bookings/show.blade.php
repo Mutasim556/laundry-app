@@ -1556,6 +1556,28 @@
                 </div>
             </div>
         @endif
+
+        @if($booking->activeTagAssignments->isNotEmpty())
+            <div class="mt-2 p-2 px-3 rounded-3 bg-light border small">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+                    <strong>Physical Laundry Tags ({{ $booking->activeTagAssignments->count() }}):</strong>
+                    <a href="{{ route('admin.tags.history', ['booking_reference' => $booking->reference]) }}" class="text-decoration-none small">View Full Tag History &rarr;</a>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach($booking->activeTagAssignments as $tagAsg)
+                        <span class="badge bg-white text-dark border px-2 py-1">
+                            <code>{{ $tagAsg->tag?->tag_code }}</code>
+                            @if($tagAsg->package_label) ({{ $tagAsg->package_label }}) @endif
+                            @if($tagAsg->isVerifiedByStore())
+                                <span class="text-success ms-1">&check; Store Verified ({{ $tagAsg->verifiedByStoreUser?->name ?? 'Staff' }})</span>
+                            @else
+                                <span class="text-muted ms-1">Assigned</span>
+                            @endif
+                        </span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
     </div>
 
     <!-- Store & Delivery Assignments (Full-Width Compact Section) -->

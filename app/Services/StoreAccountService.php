@@ -55,6 +55,10 @@ class StoreAccountService
 
         $earning = $this->earningsService->getOrCreateSnapshotForBooking($booking, $adminId);
         if (! $earning) {
+            if ($booking->currentStoreAssignment?->store?->commission_rate === null) {
+                return null;
+            }
+
             throw new RuntimeException("Cannot credit store account for booking {$booking->reference}: missing valid finalized store earning snapshot.");
         }
 

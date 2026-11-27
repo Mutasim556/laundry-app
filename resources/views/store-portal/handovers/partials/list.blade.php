@@ -56,8 +56,21 @@
                                 <div class="text-muted">{{ $req->collectionDeliveryPerson->phone_country_code }} {{ $req->collectionDeliveryPerson->phone }}</div>
                             @endif
                         </td>
-                        <td style="max-width: 240px;">
+                        <td style="max-width: 260px;">
                             <div class="text-truncate" title="{{ $itemsSummary }}">{{ $itemsSummary }}</div>
+                            @php
+                                $hTags = $req->booking?->activeTagAssignments ?? collect();
+                            @endphp
+                            @if($hTags->isNotEmpty())
+                                <div class="d-flex flex-wrap gap-1 mt-1">
+                                    @foreach($hTags as $hTagAsg)
+                                        <span class="badge {{ $hTagAsg->isVerifiedByStore() ? 'bg-success-subtle text-success' : 'bg-light text-dark border' }}" style="font-size: 0.7rem;">
+                                            {{ $hTagAsg->tag?->tag_code }}
+                                            @if($hTagAsg->isVerifiedByStore()) &check; @endif
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
                             @if($req->status === 'rejected' && !empty($req->rejection_reason))
                                 <div class="text-danger mt-1" style="font-size: 0.78rem;">Reason: {{ $req->rejection_reason }}</div>
                             @elseif(!empty($req->request_note))
@@ -80,6 +93,14 @@
                         <td class="text-end text-nowrap">
                             @if($req->status === 'pending')
                                 <div class="d-inline-flex gap-1">
+                                    @if($req->booking && $req->booking->activeTagAssignments->contains(fn ($ta) => ! $ta->isVerifiedByStore()))
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary js-store-ho-verify-tag"
+                                                data-url="{{ route('store.bookings.verify-tag', $req->booking) }}"
+                                                data-ref="{{ $bookingRef }}">
+                                            Verify Tag
+                                        </button>
+                                    @endif
                                     <button type="button"
                                             class="btn btn-sm btn-success fw-semibold js-store-open-accept"
                                             data-action="{{ route('store.handovers.accept', $req) }}"

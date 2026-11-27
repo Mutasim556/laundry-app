@@ -159,6 +159,19 @@
                 <strong>Delivery Schedule:</strong> {{ $booking->delivery_slot_label ?: ($schedule['delivery_date'] ?? 'Scheduled') }}<br>
                 <strong>Assigned Store:</strong> {{ $booking->assignedStore?->name ?? 'Not assigned' }}
             </div>
+            @if($booking->activeTagAssignments->isNotEmpty())
+                <div class="mt-2 pt-2 border-top small">
+                    <div class="fw-semibold text-dark mb-1">Attached Physical Laundry Tags ({{ $booking->activeTagAssignments->count() }}):</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach($booking->activeTagAssignments as $tagAsg)
+                            <span class="badge bg-light text-dark border px-2 py-1">
+                                <code>{{ $tagAsg->tag?->tag_code }}</code>
+                                @if($tagAsg->package_label) ({{ $tagAsg->package_label }}) @endif
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 

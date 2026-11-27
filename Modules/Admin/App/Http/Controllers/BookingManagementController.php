@@ -131,6 +131,10 @@ class BookingManagementController extends Controller
             'latestStorePickupRequest.deliveryPerson',
             'storePickupRequests.deliveryPerson',
             'storePickupRequests.requestedByStoreUser',
+            'activeTagAssignments.tag',
+            'activeTagAssignments.verifiedByStoreUser',
+            'activeTagAssignments.assignedByDeliveryPerson',
+            'tagAssignments.tag',
         ]);
 
         $currencyService = $this->currencyService;

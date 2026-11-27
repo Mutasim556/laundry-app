@@ -157,5 +157,45 @@
         "visibility": true
       }
     }
+  },
+  "Tag Management": {
+    "visibility": true,
+    "children": {
+      "Generate & Print": {
+        "visibility": true
+      },
+      "Tag Inventory": {
+        "visibility": true
+      },
+      "Assign to Delivery Person": {
+        "visibility": true
+      },
+      "Tag History": {
+        "visibility": true
+      },
+      "Printer Settings": {
+        "visibility": true
+      }
+    }
+  },
+  "Reports & Analytics": {
+    "visibility": true,
+    "children": {
+      "Overview & Comparisons": {
+        "visibility": true
+      },
+      "Transactions & Finance": {
+        "visibility": true
+      },
+      "Store Performance": {
+        "visibility": true
+      },
+      "Delivery Person Performance": {
+        "visibility": true
+      },
+      "Problem & Issue Tracker": {
+        "visibility": true
+      }
+    }
   }
 }

@@ -122,6 +122,8 @@ class DeliveryPersonBookingController extends Controller
             'currentStoreHandover.acceptedByStoreUser',
             'currentStoreHandover.rejectedByStoreUser',
             'storeHandovers',
+            'activeTagAssignments.tag',
+            'activeTagAssignments.verifiedByStoreUser',
             'latestStorePickupRequest.store',
             'storePickupRequests.store',
             'user',

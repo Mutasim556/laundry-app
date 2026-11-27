@@ -1,6 +1,6 @@
 @php
     $scope = $navScope ?? 'desktop';
-    $opsActive = request()->routeIs('store.bookings.*', 'store.handovers.*');
+    $opsActive = request()->routeIs('store.bookings.*', 'store.handovers.*', 'store.tag-verification.*');
     $finActive = request()->routeIs('store.account.*', 'store.earnings.*');
     $opsId = 'spNavOps-' . $scope;
     $finId = 'spNavFin-' . $scope;
@@ -44,6 +44,15 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
                 </span>
                 <span class="sp-nav-label">Bookings</span>
+            </a>
+            <a href="{{ route('store.tag-verification.index') }}"
+               class="sp-nav-link sp-sub-link {{ request()->routeIs('store.tag-verification.*') ? 'active' : '' }}"
+               data-sp-tooltip="QR Tag Verification"
+               title="QR Tag Verification">
+                <span class="sp-nav-ico" style="color: #16A34A;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3z"/><path d="M18 18h3v3h-3z"/></svg>
+                </span>
+                <span class="sp-nav-label">QR Tag Verification</span>
             </a>
             <a href="{{ route('store.handovers.index') }}"
                class="sp-nav-link sp-sub-link {{ request()->routeIs('store.handovers.*') ? 'active' : '' }}"
